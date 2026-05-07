@@ -86,7 +86,8 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                         st.error(f"🚨 GALAT PASSWORD for {uploaded_file.name}!")
                         continue 
 
-                station_id, total_sum, file_date, operator_id, total_entries = None, 0, None, None, 0
+                station_id, total_sum, file_date, operator_id = None, 0, None, None
+                total_enrolments, total_updates, total_entries = 0, 0, 0
                 summary_df = None
                 
                 for file in os.listdir(extract_dir):
@@ -97,11 +98,11 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                             soup = BeautifulSoup(html_content, "html.parser")
                             text_data = soup.get_text(" ", strip=True)
 
-                            # 1. Date Range Extraction
+                            # 1. Date Range
                             date_match = re.search(r"Report Generated for Date:\s*(\d{2}/\d{2}/\d{4}\s*to\s*\d{2}/\d{2}/\d{4})", text_data, re.IGNORECASE)
                             if date_match: file_date = date_match.group(1)
 
-                            # 2. Station & Operator ID Extraction
+                            # 2. Station & Operator
                             for row in soup.find_all("tr"):
                                 cols = row.find_all("td")
                                 if len(cols) >= 2:
@@ -110,12 +111,14 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                     if "Station ID" in label: station_id = val
                                     if "Operator" in label: operator_id = val
                             
-                            # 3. Summary Table
+                            # 3. Summary Table Extraction
                             all_tables = pd.read_html(path)
                             for df in all_tables:
                                 df.columns = [str(c).strip().lower() for c in df.columns]
                                 if "total" in df.columns and "no. of enrolments" in df.columns:
                                     summary_df = df
+                                    total_enrolments = pd.to_numeric(df["no. of enrolments"], errors='coerce').fillna(0).sum()
+                                    total_updates = pd.to_numeric(df["no. of updates"], errors='coerce').fillna(0).sum()
                                     total_entries = pd.to_numeric(df["total"], errors='coerce').fillna(0).sum()
                                 
                                 amt_col = next((c for c in df.columns if "total amount charged" in c), None)
@@ -132,31 +135,31 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                         worksheet = spreadsheet.worksheet(str(station_id))
                     except:
                         worksheet = spreadsheet.add_worksheet(title=str(station_id), rows="1000", cols="10")
-                        worksheet.append_row(["Date Range", "Station ID", "Operator Name", "Operator ID", "Total Entries", "Total Amount"])
+                        # Naya Header with Enrolment and Update
+                        worksheet.append_row(["Date Range", "Station ID", "Operator Name", "Operator ID", "Enrolments", "Updates", "Total", "Amount"])
                     
-                    worksheet.append_row([final_date, station_id, operator_name, operator_id, int(total_entries), int(total_sum)])
+                    # Saving all 3 to Sheet
+                    worksheet.append_row([final_date, station_id, operator_name, operator_id, int(total_enrolments), int(total_updates), int(total_entries), int(total_sum)])
                     
                     # --- SUCCESS UI ---
                     st.balloons()
                     st.success(f"✅ Report Save Success for {final_date}")
-                    
-                    # Show Name with ID in Success Info
-                    st.markdown(f"📍 **Station:** `{station_id}`")
-                    st.markdown(f"👤 **Operator:** `{operator_name}` | **ID:** `{operator_id}`")
+                    st.markdown(f"📍 **Station:** `{station_id}` | 👤 **Operator:** `{operator_name} ({operator_id})`")
                     
                     if summary_df is not None:
                         st.subheader("📋 Summary Table (From File)")
                         st.table(summary_df)
                         
-                        num_days_in_table = len(summary_df)
-                        avg_entries = total_entries / num_days_in_table if num_days_in_table > 0 else 0
+                        num_days = len(summary_df)
+                        avg_entries = total_entries / num_days if num_days > 0 else 0
                         
-                        st.info(f"📊 **Total Entries:** {int(total_entries)} | **Days:** {num_days_in_table} | **Daily Average:** {avg_entries:.1f}")
+                        st.info(f"📊 **Summary:** Enrol: {int(total_enrolments)} | Update: {int(total_updates)} | Total: {int(total_entries)}")
+                        st.write(f"📈 **Daily Average:** {avg_entries:.1f} (Days: {num_days})")
 
                         if avg_entries < 15:
-                            st.warning(f"⚠️ **Aapki din ki average entries ({avg_entries:.1f}) kam hain, kripya jyada entries karein!**")
+                            st.warning(f"⚠️ **Aapki average entries ({avg_entries:.1f}) kam hain!**")
                     
-                    st.toast(f"🔔 Yaad rakhein {operator_name}, agli file upload karni hai!", icon='📅')
+                    st.toast(f"🔔 Agli file upload karein!", icon='📅')
                 
                 shutil.rmtree(extract_dir)
 
