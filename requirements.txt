@@ -1,0 +1,7 @@
+streamlit
+pyzipper
+pandas
+beautifulsoup4
+gspread
+oauth2client
+lxml
