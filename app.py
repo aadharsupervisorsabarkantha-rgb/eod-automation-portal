@@ -37,7 +37,7 @@ st.markdown("""
     </style>
     <div class="strict-penalty-box">
         <b style="font-size: 22px;">🚫 ATTENTION OPERATOR 🚫</b><br>
-        Data upload compulsory hai. <b>Mismatch par PENALTY lagegi!</b>
+        Data upload compulsory hai. <b>Yaad Rakhein: Mismatch par PENALTY lagegi!</b>
     </div>
     """, unsafe_allow_html=True)
 
@@ -56,6 +56,7 @@ uploaded_files = st.file_uploader("ZIP Files Upload Karein", type="zip", accept_
 def get_or_create_folder(service, folder_name, parent_id=None):
     query = f"name = '{folder_name}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
     if parent_id: query += f" and '{parent_id}' in parents"
+    # Added fields and supportsAllDrives to ensure visibility
     results = service.files().list(q=query, fields="files(id)", supportsAllDrives=True, includeItemsFromAllDrives=True).execute()
     files = results.get('files', [])
     if files: return files[0]['id']
@@ -76,7 +77,7 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
             spreadsheet = client.open_by_key("19mlf7dpNJyyvnKYZpoJtjyQY6RkTaze4FsC7xCKnMrU")
             drive_service = build('drive', 'v3', credentials=creds)
             
-            # Create/Find Main Folder
+            # --- MAIN FOLDER ---
             main_folder_id = get_or_create_folder(drive_service, "EOD_Automated_Backups")
 
             for uploaded_file in uploaded_files:
@@ -92,7 +93,7 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
 
                 station_id, file_date, operator_id = None, None, None
                 enrol, update, total_ent, total_sum = 0, 0, 0, 0
-                
+
                 for file in os.listdir(extract_dir):
                     if file.endswith(".html"):
                         path = os.path.join(extract_dir, file)
@@ -121,24 +122,19 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
 
                 op_name = OPERATOR_MAP.get(operator_id, "Unknown")
                 
-                # --- DRIVE UPLOAD (STRICT QUOTA FIX) ---
+                # --- DRIVE UPLOAD ---
                 operator_folder_id = get_or_create_folder(drive_service, op_name, main_folder_id)
-                safe_date = file_date.replace("/", "-").replace(" ", "_") if file_date else "Report"
+                safe_date = file_date.replace("/", "-").replace(" ", "_") if file_date else "Range"
                 new_file_name = f"{station_id}_{op_name.replace(' ', '_')}_{safe_date}_Pass_{zip_password}.zip"
                 
                 with open(new_file_name, "wb") as f:
                     f.write(uploaded_file.getbuffer())
                 
-                media = MediaFileUpload(new_file_name, mimetype='application/zip', resumable=True)
+                media = MediaFileUpload(new_file_name, mimetype='application/zip')
                 
-                # Uploading and making sure it inherits parent permissions
-                file_metadata = {
-                    'name': new_file_name,
-                    'parents': [operator_folder_id]
-                }
-                
+                # IMPORTANT: metadata must include parent, and create must use supportsAllDrives
                 drive_service.files().create(
-                    body=file_metadata,
+                    body={'name': new_file_name, 'parents': [operator_folder_id]},
                     media_body=media,
                     fields='id',
                     supportsAllDrives=True
@@ -152,7 +148,7 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                         worksheet.append_row(["Date Range", "Station ID", "Operator Name", "Operator ID", "Enrol", "Update", "Total", "Amount"])
                     worksheet.append_row([file_date, station_id, op_name, operator_id, int(enrol), int(update), int(total_ent), int(total_sum)])
                     
-                    st.success(f"✅ Success: Data & File for {op_name} saved!")
+                    st.success(f"✅ Success: Data & ZIP saved for {op_name}!")
                 
                 shutil.rmtree(extract_dir)
                 if os.path.exists(new_file_name): os.remove(new_file_name)
