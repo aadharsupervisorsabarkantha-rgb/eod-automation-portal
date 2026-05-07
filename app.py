@@ -9,29 +9,42 @@ from datetime import datetime
 
 st.set_page_config(page_title="EOD Professional Portal", layout="centered")
 
+# --- OPERATOR DATABASE ---
+OPERATOR_MAP = {
+    "GJPE_SBK_NS603205": "RATHOD VIJAY",
+    "GJPE_SBK_NS435053": "PATEL VIPUL",
+    "GJPE_SBK_NS668733": "CHAUHAN CHANDUJI",
+    "GJPE_SBK_NS716164": "DAYANI MADHUBEN",
+    "GJPE_SBR_NS851220": "MEMON SAKIL",
+    "GJPE_SBK_NS101318": "BHATT SANAM",
+    "GJPE_SBK_NS054082": "SOLANKI RAJESH",
+    "GJPE_SBK_NS463140": "JADAV SHASHIKANT",
+    "GJPE_SBK_NS728611": "RAVAL JAYPAL",
+    "GJPE_SBK_NS721374": "ASARI ROHIT",
+    "GJPE_SBK_NS776405": "BAROT APURVA",
+    "GJPE_SBK_NS829265": "VANKAR TEJALBEN",
+    "GJPE_SBK_NS442326": "MANSURI VARISH",
+    "GJPE_SBK_NS701346": "DABHI SAGAR",
+    "GJPE_SBR_NS737401": "DABHI BIBIBEN",
+    "GJPE_SBK_NS101344": "PARMAR RAVINDRA"
+}
+
 # Penalty Warning UI
 st.markdown("""
     <style>
     .penalty-box {
-        padding: 15px;
-        border-radius: 10px;
-        background-color: #ff4b4b;
-        color: white;
-        font-weight: bold;
-        text-align: center;
-        margin-bottom: 25px;
-        border: 2px solid white;
+        padding: 15px; border-radius: 10px; background-color: #ff4b4b; color: white;
+        font-weight: bold; text-align: center; margin-bottom: 25px; border: 2px solid white;
     }
     </style>
     <div class="penalty-box">
-        ⚠️ ATTENTION OPERATOR: Har mahine data upload karna compulsory hai.<br>
-        DATA MISMATCH ya DELAY hone par Seedhi PENALTY lagu hogi!
+        ⚠️ ATTENTION OPERATOR: Data upload compulsory hai. Mismatch par PENALTY lagu hogi!
     </div>
     """, unsafe_allow_html=True)
 
 st.title("🏦 Station EOD Automation")
 
-# --- STEP 1: DROPDOWN (Wapas Add Kar Diya) ---
+# --- STEP 1: DROPDOWN ---
 st.subheader("1️⃣ Details Select Karein")
 col1, col2, col3 = st.columns(3)
 with col1:
@@ -40,12 +53,11 @@ with col2:
     months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
     selected_month = st.selectbox("Month", months, index=datetime.now().month - 1)
 with col3:
-    selected_year = st.selectbox("Year", [datetime.now().year, datetime.now().year-1], index=0)
+    selected_year = st.selectbox("Year", [2025, 2026], index=0)
 
 # --- STEP 2: PASSWORD & UPLOAD ---
 st.subheader("2️⃣ Security & File")
-# Flexible Password: Jo operator likhega wahi use hoga
-zip_password = st.text_input("ZIP File ka Password dalein", type="password", help="File ko protect karne wala password yahan likhein")
+zip_password = st.text_input("ZIP File ka Password dalein", type="password")
 uploaded_files = st.file_uploader("ZIP Files Upload Karein", type="zip", accept_multiple_files=True)
 
 if st.button("🚀 FINAL SUBMIT & PROCESS"):
@@ -53,7 +65,6 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
         st.error("❌ Kripya Password aur File dono check karein!")
     else:
         try:
-            # Google Sheet Auth
             scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
             creds_dict = st.secrets["gcp_service_account"]
             creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
@@ -65,34 +76,38 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                 if os.path.exists(extract_dir): shutil.rmtree(extract_dir)
                 os.makedirs(extract_dir)
 
-                # --- FLEXIBLE PASSWORD CHECK ---
                 with pyzipper.AESZipFile(uploaded_file) as zf:
                     try:
                         zf.extractall(extract_dir, pwd=zip_password.encode())
                     except:
-                        st.error(f"🚨 GALAT PASSWORD! File '{uploaded_file.name}' nahi khul saki. Sahi password likhein.")
+                        st.error(f"🚨 GALAT PASSWORD for {uploaded_file.name}!")
                         continue 
 
-                station_id, total_sum, file_date = None, 0, None
+                station_id, total_sum, file_date, operator_id = None, 0, None, None
                 
                 for file in os.listdir(extract_dir):
                     if file.endswith(".html"):
                         path = os.path.join(extract_dir, file)
                         with open(path, "r", encoding="utf-8", errors="ignore") as f:
-                            soup = BeautifulSoup(f, "html.parser")
-                            
-                            # ACTUAL DATE EXTRACTION FROM FILE
-                            text_data = soup.get_text(" ")
-                            date_matches = re.findall(r'\d{2}[\s/\-]\d{2}[\s/\-]\d{4}', text_data)
-                            if len(date_matches) >= 2:
-                                file_date = f"{date_matches[0]} to {date_matches[1]}"
+                            html_content = f.read()
+                            soup = BeautifulSoup(html_content, "html.parser")
+                            text_data = soup.get_text(" ", strip=True)
 
-                            # Station & Amount Logic
+                            # --- 1. STRICT DATE EXTRACTION ---
+                            date_match = re.search(r"Report Generated for Date:\s*(\d{2}/\d{2}/\d{4}\s*to\s*\d{2}/\d{2}/\d{4})", text_data, re.IGNORECASE)
+                            if date_match:
+                                file_date = date_match.group(1)
+
+                            # --- 2. STATION & OPERATOR EXTRACTION ---
                             for row in soup.find_all("tr"):
                                 cols = row.find_all("td")
-                                if len(cols) >= 2 and "Station ID" in cols[0].get_text():
-                                    station_id = cols[1].get_text(strip=True)
+                                if len(cols) >= 2:
+                                    label = cols[0].get_text(strip=True)
+                                    val = cols[1].get_text(strip=True)
+                                    if "Station ID" in label: station_id = val
+                                    if "Operator" in label: operator_id = val
                             
+                            # --- 3. AMOUNT ---
                             tables = pd.read_html(path)
                             for df in tables:
                                 df.columns = [str(c).strip().lower() for c in df.columns]
@@ -101,23 +116,30 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                     cleaned = df[col].astype(str).str.replace(r"[^\d.\-]", "", regex=True)
                                     total_sum += pd.to_numeric(cleaned, errors='coerce').fillna(0).sum()
 
-                # Final Date Decision (Priority: File > Dropdown)
-                final_date_to_sheet = file_date if file_date else f"{ui_date_range} {selected_month} {selected_year}"
+                # Map Operator ID to Name
+                operator_name = OPERATOR_MAP.get(operator_id, "Unknown Operator")
+                final_date = file_date if file_date else f"{ui_date_range} {selected_month} {selected_year}"
 
                 if station_id:
                     try:
                         worksheet = spreadsheet.worksheet(str(station_id))
                     except:
                         worksheet = spreadsheet.add_worksheet(title=str(station_id), rows="1000", cols="10")
-                        worksheet.append_row(["Date Range", "Station ID", "Total Amount"])
+                        worksheet.append_row(["Date Range", "Station ID", "Operator Name", "Operator ID", "Total Amount"])
                     
-                    worksheet.append_row([final_date_to_sheet, station_id, int(total_sum)])
+                    # Save to Sheet
+                    worksheet.append_row([final_date, station_id, operator_name, operator_id, int(total_sum)])
                     
-                    # --- SUCCESS POPUP & TOAST REMINDER ---
+                    # --- DYNAMIC SUCCESS MESSAGE ---
                     st.balloons()
-                    st.success(f"✅ SUCCESS! Station {station_id} ka data save ho gaya.")
-                    st.toast("🔔 YAAD RAKHEIN: Agli date range ki file bhi yaad se upload karein!", icon='📅')
-                    st.info(f"Recorded Date: {final_date_to_sheet}")
+                    st.success(f"✅ Report Save Success for {final_date}")
+                    st.markdown(f"""
+                        **📋 Report Summary:**
+                        * **Station ID:** {station_id}
+                        * **Operator Name:** {operator_name}
+                        * **Operator ID:** {operator_id}
+                    """)
+                    st.toast(f"🔔 Yaad rakhein {operator_name}, agli file bhi upload karni hai!", icon='📅')
                 
                 shutil.rmtree(extract_dir)
 
