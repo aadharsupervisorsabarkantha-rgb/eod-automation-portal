@@ -6,8 +6,6 @@ from bs4 import BeautifulSoup
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload
 
 st.set_page_config(page_title="EOD Professional Portal", layout="centered")
 
@@ -53,32 +51,17 @@ with col3: selected_year = st.selectbox("Year", [2025, 2026], index=0)
 zip_password = st.text_input("ZIP File ka Password dalein", type="password")
 uploaded_files = st.file_uploader("ZIP Files Upload Karein", type="zip", accept_multiple_files=True)
 
-def get_or_create_folder(service, folder_name, parent_id=None):
-    query = f"name = '{folder_name}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
-    if parent_id: query += f" and '{parent_id}' in parents"
-    # Added fields and supportsAllDrives to ensure visibility
-    results = service.files().list(q=query, fields="files(id)", supportsAllDrives=True, includeItemsFromAllDrives=True).execute()
-    files = results.get('files', [])
-    if files: return files[0]['id']
-    folder_metadata = {'name': folder_name, 'mimeType': 'application/vnd.google-apps.folder'}
-    if parent_id: folder_metadata['parents'] = [parent_id]
-    return service.files().create(body=folder_metadata, fields='id', supportsAllDrives=True).execute()['id']
-
 if st.button("🚀 FINAL SUBMIT & PROCESS"):
     if not uploaded_files or not zip_password:
         st.error("❌ Password aur File check karein!")
     else:
         try:
+            # Sheet Auth
             creds_dict = st.secrets["gcp_service_account"]
             scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
             creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
-            
             client = gspread.authorize(creds)
             spreadsheet = client.open_by_key("19mlf7dpNJyyvnKYZpoJtjyQY6RkTaze4FsC7xCKnMrU")
-            drive_service = build('drive', 'v3', credentials=creds)
-            
-            # --- MAIN FOLDER ---
-            main_folder_id = get_or_create_folder(drive_service, "EOD_Automated_Backups")
 
             for uploaded_file in uploaded_files:
                 extract_dir = f"temp_{uploaded_file.name}"
@@ -93,6 +76,7 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
 
                 station_id, file_date, operator_id = None, None, None
                 enrol, update, total_ent, total_sum = 0, 0, 0, 0
+                summary_df = None
 
                 for file in os.listdir(extract_dir):
                     if file.endswith(".html"):
@@ -107,11 +91,13 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                 if len(c) >= 2:
                                     if "Station ID" in c[0].text: station_id = c[1].text.strip()
                                     if "Operator" in c[0].text: operator_id = c[1].text.strip()
+                            
                             try:
                                 all_tabs = pd.read_html(path)
                                 for df in all_tabs:
                                     df.columns = [str(col).strip().lower() for col in df.columns]
                                     if "total" in df.columns and "no. of enrolments" in df.columns:
+                                        summary_df = df
                                         enrol = pd.to_numeric(df["no. of enrolments"], errors='coerce').sum()
                                         update = pd.to_numeric(df["no. of updates"], errors='coerce').sum()
                                         total_ent = pd.to_numeric(df["total"], errors='coerce').sum()
@@ -122,36 +108,21 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
 
                 op_name = OPERATOR_MAP.get(operator_id, "Unknown")
                 
-                # --- DRIVE UPLOAD ---
-                operator_folder_id = get_or_create_folder(drive_service, op_name, main_folder_id)
-                safe_date = file_date.replace("/", "-").replace(" ", "_") if file_date else "Range"
-                new_file_name = f"{station_id}_{op_name.replace(' ', '_')}_{safe_date}_Pass_{zip_password}.zip"
-                
-                with open(new_file_name, "wb") as f:
-                    f.write(uploaded_file.getbuffer())
-                
-                media = MediaFileUpload(new_file_name, mimetype='application/zip')
-                
-                # IMPORTANT: metadata must include parent, and create must use supportsAllDrives
-                drive_service.files().create(
-                    body={'name': new_file_name, 'parents': [operator_folder_id]},
-                    media_body=media,
-                    fields='id',
-                    supportsAllDrives=True
-                ).execute()
-
-                # --- SHEET UPDATE ---
+                # Sheet Update
                 if station_id:
                     try: worksheet = spreadsheet.worksheet(str(station_id))
                     except:
                         worksheet = spreadsheet.add_worksheet(title=str(station_id), rows="1000", cols="10")
                         worksheet.append_row(["Date Range", "Station ID", "Operator Name", "Operator ID", "Enrol", "Update", "Total", "Amount"])
+                    
                     worksheet.append_row([file_date, station_id, op_name, operator_id, int(enrol), int(update), int(total_ent), int(total_sum)])
                     
-                    st.success(f"✅ Success: Data & ZIP saved for {op_name}!")
+                    st.success(f"✅ Data processed successfully for {op_name}!")
+                    st.markdown(f"📍 **Station:** `{station_id}` | 👤 **Operator:** `{op_name}`")
+                    if summary_df is not None:
+                        st.table(summary_df)
                 
                 shutil.rmtree(extract_dir)
-                if os.path.exists(new_file_name): os.remove(new_file_name)
 
         except Exception as e:
             st.error(f"Error: {e}")
