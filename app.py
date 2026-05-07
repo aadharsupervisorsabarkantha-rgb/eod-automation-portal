@@ -31,7 +31,6 @@ OPERATOR_MAP = {
     "GJPE_SBK_NS101344": "PARMAR RAVINDRA"
 }
 
-# --- STYLING ---
 st.markdown("""
     <style>
     .strict-penalty-box { padding: 20px; border-radius: 12px; background-color: #d32f2f; color: #ffffff; text-align: center; border: 4px solid #f44336; margin-bottom: 30px; }
@@ -44,7 +43,7 @@ st.markdown("""
 
 st.title("🏦 Station EOD Automation")
 
-# --- STEP 1: INPUTS ---
+# --- INPUTS ---
 st.subheader("1️⃣ Details & File")
 col1, col2, col3 = st.columns(3)
 with col1: ui_date_range = st.selectbox("Expected Date Range", ["01 to 08", "09 to 16", "17 to 24", "25 to 31"])
@@ -54,7 +53,6 @@ with col3: selected_year = st.selectbox("Year", [2025, 2026], index=0)
 zip_password = st.text_input("ZIP File ka Password dalein", type="password")
 uploaded_files = st.file_uploader("ZIP Files Upload Karein", type="zip", accept_multiple_files=True)
 
-# Helper function to find or create Drive Folder
 def get_or_create_folder(service, folder_name, parent_id=None):
     query = f"name = '{folder_name}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
     if parent_id: query += f" and '{parent_id}' in parents"
@@ -65,13 +63,11 @@ def get_or_create_folder(service, folder_name, parent_id=None):
     if parent_id: folder_metadata['parents'] = [parent_id]
     return service.files().create(body=folder_metadata, fields='id', supportsAllDrives=True).execute()['id']
 
-# --- STEP 2: PROCESS ---
 if st.button("🚀 FINAL SUBMIT & PROCESS"):
     if not uploaded_files or not zip_password:
         st.error("❌ Password aur File check karein!")
     else:
         try:
-            # AUTH
             creds_dict = st.secrets["gcp_service_account"]
             scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
             creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
@@ -80,7 +76,7 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
             spreadsheet = client.open_by_key("19mlf7dpNJyyvnKYZpoJtjyQY6RkTaze4FsC7xCKnMrU")
             drive_service = build('drive', 'v3', credentials=creds)
             
-            # Create Main Folder
+            # --- MAIN FOLDER ---
             main_folder_id = get_or_create_folder(drive_service, "EOD_Automated_Backups")
 
             for uploaded_file in uploaded_files:
@@ -104,16 +100,13 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                         with open(path, "r", encoding="utf-8", errors="ignore") as f:
                             soup = BeautifulSoup(f.read(), "html.parser")
                             text = soup.get_text(" ", strip=True)
-                            
                             d_match = re.search(r"Report Generated for Date:\s*(\d{2}/\d{2}/\d{4}\s*to\s*\d{2}/\d{2}/\d{4})", text, re.I)
                             if d_match: file_date = d_match.group(1)
-                            
                             for row in soup.find_all("tr"):
                                 c = row.find_all("td")
                                 if len(c) >= 2:
                                     if "Station ID" in c[0].text: station_id = c[1].text.strip()
                                     if "Operator" in c[0].text: operator_id = c[1].text.strip()
-
                             all_tabs = pd.read_html(path)
                             for df in all_tabs:
                                 df.columns = [str(col).strip().lower() for col in df.columns]
@@ -122,14 +115,13 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                     enrol = pd.to_numeric(df["no. of enrolments"], errors='coerce').sum()
                                     update = pd.to_numeric(df["no. of updates"], errors='coerce').sum()
                                     total_ent = pd.to_numeric(df["total"], errors='coerce').sum()
-                                
                                 amt_col = next((c for c in df.columns if "total amount charged" in c), None)
                                 if amt_col:
                                     total_sum += pd.to_numeric(df[amt_col].astype(str).str.replace(r"[^\d.]", "", regex=True), errors='coerce').sum()
 
                 op_name = OPERATOR_MAP.get(operator_id, "Unknown")
                 
-                # DRIVE UPLOAD LOGIC
+                # --- DRIVE UPLOAD (Fixed for Quota Error) ---
                 operator_folder_id = get_or_create_folder(drive_service, op_name, main_folder_id)
                 safe_date = file_date.replace("/", "-").replace(" ", "_") if file_date else "Range"
                 new_file_name = f"{station_id}_{op_name.replace(' ', '_')}_{safe_date}_Pass_{zip_password}.zip"
@@ -141,22 +133,19 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                 drive_service.files().create(
                     body={'name': new_file_name, 'parents': [operator_folder_id]},
                     media_body=media,
-                    supportsAllDrives=True # Fixes Quota Error
+                    fields='id',
+                    supportsAllDrives=True
                 ).execute()
 
-                # SHEET LOGIC
+                # --- SHEET UPDATE ---
                 if station_id:
                     try: worksheet = spreadsheet.worksheet(str(station_id))
                     except:
                         worksheet = spreadsheet.add_worksheet(title=str(station_id), rows="1000", cols="10")
                         worksheet.append_row(["Date Range", "Station ID", "Operator Name", "Operator ID", "Enrol", "Update", "Total", "Amount"])
-                    
                     worksheet.append_row([file_date, station_id, op_name, operator_id, int(enrol), int(update), int(total_ent), int(total_sum)])
                     
                     st.success(f"✅ Data processed successfully!")
-                    st.markdown(f"📍 **Station:** `{station_id}` | 👤 **Operator:** `{op_name}`")
-                    if summary_df is not None:
-                        st.table(summary_df)
                 
                 shutil.rmtree(extract_dir)
                 if os.path.exists(new_file_name): os.remove(new_file_name)
