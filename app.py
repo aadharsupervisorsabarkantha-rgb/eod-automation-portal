@@ -87,6 +87,7 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                         continue 
 
                 station_id, total_sum, file_date, operator_id, total_entries = None, 0, None, None, 0
+                summary_df = None
                 
                 for file in os.listdir(extract_dir):
                     if file.endswith(".html"):
@@ -96,7 +97,7 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                             soup = BeautifulSoup(html_content, "html.parser")
                             text_data = soup.get_text(" ", strip=True)
 
-                            # 1. Date Extraction
+                            # 1. Date Range Extraction
                             date_match = re.search(r"Report Generated for Date:\s*(\d{2}/\d{2}/\d{4}\s*to\s*\d{2}/\d{2}/\d{4})", text_data, re.IGNORECASE)
                             if date_match: file_date = date_match.group(1)
 
@@ -109,20 +110,22 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                     if "Station ID" in label: station_id = val
                                     if "Operator" in label: operator_id = val
                             
-                            # 3. Entries (S.No) & Amount
-                            tables = pd.read_html(path)
-                            for df in tables:
+                            # 3. Find Summary Table
+                            all_tables = pd.read_html(path)
+                            for df in all_tables:
                                 df.columns = [str(c).strip().lower() for c in df.columns]
-                                if "s.no" in df.columns:
-                                    # Count total rows for S.No
-                                    total_entries = len(df)
-                                col = next((c for c in df.columns if "total amount charged" in c), None)
-                                if col:
-                                    cleaned = df[col].astype(str).str.replace(r"[^\d.\-]", "", regex=True)
+                                if "total" in df.columns and "no. of enrolments" in df.columns:
+                                    summary_df = df
+                                    # Calculate total from the 'total' column
+                                    total_entries = pd.to_numeric(df["total"], errors='coerce').fillna(0).sum()
+                                
+                                # Amount Calculation
+                                amt_col = next((c for c in df.columns if "total amount charged" in c), None)
+                                if amt_col:
+                                    cleaned = df[amt_col].astype(str).str.replace(r"[^\d.\-]", "", regex=True)
                                     total_sum += pd.to_numeric(cleaned, errors='coerce').fillna(0).sum()
 
-                # --- AVERAGE CALCULATOR ---
-                avg_entries = total_entries / 8 # Dividing by 8 days
+                # Results Process
                 operator_name = OPERATOR_MAP.get(operator_id, "Unknown Operator")
                 final_date = file_date if file_date else f"{ui_date_range} {selected_month} {selected_year}"
 
@@ -133,16 +136,26 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                         worksheet = spreadsheet.add_worksheet(title=str(station_id), rows="1000", cols="10")
                         worksheet.append_row(["Date Range", "Station ID", "Operator Name", "Total Entries", "Total Amount"])
                     
-                    worksheet.append_row([final_date, station_id, operator_name, total_entries, int(total_sum)])
+                    worksheet.append_row([final_date, station_id, operator_name, int(total_entries), int(total_sum)])
                     
-                    # --- DYNAMIC SUCCESS & WARNING MESSAGES ---
+                    # --- SUCCESS UI ---
                     st.balloons()
                     st.success(f"✅ Report Save Success for {final_date}")
-                    st.markdown(f"📍 **Station:** {station_id} | 👤 **Operator:** {operator_name} ({operator_id})")
-                    st.info(f"📊 **Total Entries:** {total_entries} | **Daily Average:** {avg_entries:.1f}")
+                    st.markdown(f"📍 **Station:** `{station_id}` | 👤 **Operator:** `{operator_name}`")
+                    
+                    # --- SHOW FULL SUMMARY TABLE ---
+                    if summary_df is not None:
+                        st.subheader("📋 Summary Table (From File)")
+                        st.table(summary_df)
+                        
+                        # Dynamic Divide Logic: Based on number of rows in the table
+                        num_days_in_table = len(summary_df)
+                        avg_entries = total_entries / num_days_in_table if num_days_in_table > 0 else 0
+                        
+                        st.info(f"📊 **Total Entries:** {int(total_entries)} | **Days in Table:** {num_days_in_table} | **Daily Average:** {avg_entries:.1f}")
 
-                    if avg_entries < 15:
-                        st.warning(f"⚠️ **Warning:** Aapki din ki average entries ({avg_entries:.1f}) kam hain, kripya usse jyada entries karein!")
+                        if avg_entries < 15:
+                            st.warning(f"⚠️ **Aapki din ki average entries ({avg_entries:.1f}) kam hain, kripya usse jyada entries karein!**")
                     
                     st.toast(f"🔔 Agli file yaad se upload karein!", icon='📅')
                 
