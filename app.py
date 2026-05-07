@@ -29,16 +29,19 @@ OPERATOR_MAP = {
     "GJPE_SBK_NS101344": "PARMAR RAVINDRA"
 }
 
-# Penalty Warning UI
+# --- RED PENALTY WARNING BOX ---
 st.markdown("""
     <style>
-    .penalty-box {
-        padding: 15px; border-radius: 10px; background-color: #ff4b4b; color: white;
-        font-weight: bold; text-align: center; margin-bottom: 25px; border: 2px solid white;
+    .strict-penalty-box {
+        padding: 20px; border-radius: 12px; background-color: #d32f2f; color: #ffffff;
+        font-family: sans-serif; font-size: 18px; text-align: center;
+        border: 4px solid #f44336; box-shadow: 0px 4px 15px rgba(0,0,0,0.3); margin-bottom: 30px;
     }
     </style>
-    <div class="penalty-box">
-        ⚠️ ATTENTION OPERATOR: Data upload compulsory hai. Mismatch par PENALTY lagu hogi!
+    <div class="strict-penalty-box">
+        <b style="font-size: 22px;">🚫 ATTENTION OPERATOR 🚫</b><br>
+        Data upload compulsory hai. <br>
+        <b>Yaad Rakhein: Mismatch par PENALTY lagegi!</b>
     </div>
     """, unsafe_allow_html=True)
 
@@ -83,7 +86,7 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                         st.error(f"🚨 GALAT PASSWORD for {uploaded_file.name}!")
                         continue 
 
-                station_id, total_sum, file_date, operator_id = None, 0, None, None
+                station_id, total_sum, file_date, operator_id, total_entries = None, 0, None, None, 0
                 
                 for file in os.listdir(extract_dir):
                     if file.endswith(".html"):
@@ -93,12 +96,11 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                             soup = BeautifulSoup(html_content, "html.parser")
                             text_data = soup.get_text(" ", strip=True)
 
-                            # --- 1. STRICT DATE EXTRACTION ---
+                            # 1. Date Extraction
                             date_match = re.search(r"Report Generated for Date:\s*(\d{2}/\d{2}/\d{4}\s*to\s*\d{2}/\d{2}/\d{4})", text_data, re.IGNORECASE)
-                            if date_match:
-                                file_date = date_match.group(1)
+                            if date_match: file_date = date_match.group(1)
 
-                            # --- 2. STATION & OPERATOR EXTRACTION ---
+                            # 2. Station & Operator
                             for row in soup.find_all("tr"):
                                 cols = row.find_all("td")
                                 if len(cols) >= 2:
@@ -107,16 +109,20 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                     if "Station ID" in label: station_id = val
                                     if "Operator" in label: operator_id = val
                             
-                            # --- 3. AMOUNT ---
+                            # 3. Entries (S.No) & Amount
                             tables = pd.read_html(path)
                             for df in tables:
                                 df.columns = [str(c).strip().lower() for c in df.columns]
+                                if "s.no" in df.columns:
+                                    # Count total rows for S.No
+                                    total_entries = len(df)
                                 col = next((c for c in df.columns if "total amount charged" in c), None)
                                 if col:
                                     cleaned = df[col].astype(str).str.replace(r"[^\d.\-]", "", regex=True)
                                     total_sum += pd.to_numeric(cleaned, errors='coerce').fillna(0).sum()
 
-                # Map Operator ID to Name
+                # --- AVERAGE CALCULATOR ---
+                avg_entries = total_entries / 8 # Dividing by 8 days
                 operator_name = OPERATOR_MAP.get(operator_id, "Unknown Operator")
                 final_date = file_date if file_date else f"{ui_date_range} {selected_month} {selected_year}"
 
@@ -125,21 +131,20 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                         worksheet = spreadsheet.worksheet(str(station_id))
                     except:
                         worksheet = spreadsheet.add_worksheet(title=str(station_id), rows="1000", cols="10")
-                        worksheet.append_row(["Date Range", "Station ID", "Operator Name", "Operator ID", "Total Amount"])
+                        worksheet.append_row(["Date Range", "Station ID", "Operator Name", "Total Entries", "Total Amount"])
                     
-                    # Save to Sheet
-                    worksheet.append_row([final_date, station_id, operator_name, operator_id, int(total_sum)])
+                    worksheet.append_row([final_date, station_id, operator_name, total_entries, int(total_sum)])
                     
-                    # --- DYNAMIC SUCCESS MESSAGE ---
+                    # --- DYNAMIC SUCCESS & WARNING MESSAGES ---
                     st.balloons()
                     st.success(f"✅ Report Save Success for {final_date}")
-                    st.markdown(f"""
-                        **📋 Report Summary:**
-                        * **Station ID:** {station_id}
-                        * **Operator Name:** {operator_name}
-                        * **Operator ID:** {operator_id}
-                    """)
-                    st.toast(f"🔔 Yaad rakhein {operator_name}, agli file bhi upload karni hai!", icon='📅')
+                    st.markdown(f"📍 **Station:** {station_id} | 👤 **Operator:** {operator_name} ({operator_id})")
+                    st.info(f"📊 **Total Entries:** {total_entries} | **Daily Average:** {avg_entries:.1f}")
+
+                    if avg_entries < 15:
+                        st.warning(f"⚠️ **Warning:** Aapki din ki average entries ({avg_entries:.1f}) kam hain, kripya usse jyada entries karein!")
+                    
+                    st.toast(f"🔔 Agli file yaad se upload karein!", icon='📅')
                 
                 shutil.rmtree(extract_dir)
 
