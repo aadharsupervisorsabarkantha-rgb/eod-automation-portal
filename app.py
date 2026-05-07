@@ -157,7 +157,7 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                         st.write(f"📈 **Daily Average:** {avg_entries:.1f} (Days: {num_days})")
 
                         if avg_entries < 15:
-                            st.warning(f"⚠️ **Aapki average entries ({avg_entries:.1f}) kam hain!**")
+                            st.warning(f"⚠️ **Aapki din ki average entries ({avg_entries:.1f}) kam hain, kripya usse jyada entries karein!**")
                     
                     st.toast(f"🔔 Agli file upload karein!", icon='📅')
                 
