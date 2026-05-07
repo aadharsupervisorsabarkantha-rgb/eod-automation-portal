@@ -101,7 +101,7 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                             date_match = re.search(r"Report Generated for Date:\s*(\d{2}/\d{2}/\d{4}\s*to\s*\d{2}/\d{2}/\d{4})", text_data, re.IGNORECASE)
                             if date_match: file_date = date_match.group(1)
 
-                            # 2. Station & Operator
+                            # 2. Station & Operator ID Extraction
                             for row in soup.find_all("tr"):
                                 cols = row.find_all("td")
                                 if len(cols) >= 2:
@@ -110,16 +110,14 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                     if "Station ID" in label: station_id = val
                                     if "Operator" in label: operator_id = val
                             
-                            # 3. Find Summary Table
+                            # 3. Summary Table
                             all_tables = pd.read_html(path)
                             for df in all_tables:
                                 df.columns = [str(c).strip().lower() for c in df.columns]
                                 if "total" in df.columns and "no. of enrolments" in df.columns:
                                     summary_df = df
-                                    # Calculate total from the 'total' column
                                     total_entries = pd.to_numeric(df["total"], errors='coerce').fillna(0).sum()
                                 
-                                # Amount Calculation
                                 amt_col = next((c for c in df.columns if "total amount charged" in c), None)
                                 if amt_col:
                                     cleaned = df[amt_col].astype(str).str.replace(r"[^\d.\-]", "", regex=True)
@@ -132,34 +130,4 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                 if station_id:
                     try:
                         worksheet = spreadsheet.worksheet(str(station_id))
-                    except:
-                        worksheet = spreadsheet.add_worksheet(title=str(station_id), rows="1000", cols="10")
-                        worksheet.append_row(["Date Range", "Station ID", "Operator Name", "Total Entries", "Total Amount"])
-                    
-                    worksheet.append_row([final_date, station_id, operator_name, int(total_entries), int(total_sum)])
-                    
-                    # --- SUCCESS UI ---
-                    st.balloons()
-                    st.success(f"✅ Report Save Success for {final_date}")
-                    st.markdown(f"📍 **Station:** `{station_id}` | 👤 **Operator:** `{operator_name}`")
-                    
-                    # --- SHOW FULL SUMMARY TABLE ---
-                    if summary_df is not None:
-                        st.subheader("📋 Summary Table (From File)")
-                        st.table(summary_df)
-                        
-                        # Dynamic Divide Logic: Based on number of rows in the table
-                        num_days_in_table = len(summary_df)
-                        avg_entries = total_entries / num_days_in_table if num_days_in_table > 0 else 0
-                        
-                        st.info(f"📊 **Total Entries:** {int(total_entries)} | **Days in Table:** {num_days_in_table} | **Daily Average:** {avg_entries:.1f}")
-
-                        if avg_entries < 15:
-                            st.warning(f"⚠️ **Aapki din ki average entries ({avg_entries:.1f}) kam hain, kripya usse jyada entries karein!**")
-                    
-                    st.toast(f"🔔 Agli file yaad se upload karein!", icon='📅')
-                
-                shutil.rmtree(extract_dir)
-
-        except Exception as e:
-            st.error(f"System Error: {e}")
+                    except
