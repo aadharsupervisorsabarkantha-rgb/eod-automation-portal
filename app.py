@@ -130,4 +130,35 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                 if station_id:
                     try:
                         worksheet = spreadsheet.worksheet(str(station_id))
-                    except
+                    except:
+                        worksheet = spreadsheet.add_worksheet(title=str(station_id), rows="1000", cols="10")
+                        worksheet.append_row(["Date Range", "Station ID", "Operator Name", "Operator ID", "Total Entries", "Total Amount"])
+                    
+                    worksheet.append_row([final_date, station_id, operator_name, operator_id, int(total_entries), int(total_sum)])
+                    
+                    # --- SUCCESS UI ---
+                    st.balloons()
+                    st.success(f"✅ Report Save Success for {final_date}")
+                    
+                    # Show Name with ID in Success Info
+                    st.markdown(f"📍 **Station:** `{station_id}`")
+                    st.markdown(f"👤 **Operator:** `{operator_name}` | **ID:** `{operator_id}`")
+                    
+                    if summary_df is not None:
+                        st.subheader("📋 Summary Table (From File)")
+                        st.table(summary_df)
+                        
+                        num_days_in_table = len(summary_df)
+                        avg_entries = total_entries / num_days_in_table if num_days_in_table > 0 else 0
+                        
+                        st.info(f"📊 **Total Entries:** {int(total_entries)} | **Days:** {num_days_in_table} | **Daily Average:** {avg_entries:.1f}")
+
+                        if avg_entries < 15:
+                            st.warning(f"⚠️ **Aapki din ki average entries ({avg_entries:.1f}) kam hain, kripya jyada entries karein!**")
+                    
+                    st.toast(f"🔔 Yaad rakhein {operator_name}, agli file upload karni hai!", icon='📅')
+                
+                shutil.rmtree(extract_dir)
+
+        except Exception as e:
+            st.error(f"System Error: {e}")
