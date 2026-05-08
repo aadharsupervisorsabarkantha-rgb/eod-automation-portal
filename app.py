@@ -21,7 +21,7 @@ OPERATOR_MAP = {
     "GJPE_SBK_NS101344": "PARMAR RAVINDRA"
 }
 
-# --- STYLING ---
+# --- UI STYLING ---
 st.markdown("""
     <style>
     .main-box { padding: 20px; border-radius: 12px; background-color: #d32f2f; color: white; text-align: center; margin-bottom: 20px; }
@@ -31,7 +31,7 @@ st.markdown("""
     <div class="main-box"><b style="font-size: 22px;">🏦 STATION EOD AUTOMATION SYSTEM</b></div>
     """, unsafe_allow_html=True)
 
-# Dropdowns (For Professional Look Only)
+# Dropdowns
 col1, col2, col3 = st.columns(3)
 with col1: st.selectbox("Date Range", ["01 to 08", "09 to 16", "17 to 24", "25 to 31"])
 with col2: st.selectbox("Month", ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"], index=datetime.now().month - 1)
@@ -58,91 +58,93 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                     try: zf.extractall(extract_dir, pwd=zip_password.encode())
                     except: st.error("🚨 Password Galat Hai!"); continue
 
-                station_id, file_range, operator_id = None, None, None
-                date_summary_table, details_table = None, None
+                # Extraction logic
+                station_id, operator_id = None, None
+                master_data = [] # Saari entries isme aayengi
 
                 for file in os.listdir(extract_dir):
                     if file.endswith(".html"):
                         path = os.path.join(extract_dir, file)
-                        all_tabs = pd.read_html(path)
                         with open(path, "r", encoding="utf-8") as f:
                             soup = BeautifulSoup(f.read(), "html.parser")
-                            text = soup.get_text(" ", strip=True)
-                            d_match = re.search(r"Date:\s*(\d{2}/\d{2}/\d{4}\s*to\s*\d{2}/\d{2}/\d{4})", text)
-                            if d_match: file_range = d_match.group(1)
-                            for row in soup.find_all("tr"):
-                                c = row.find_all("td")
-                                if len(c) >= 2:
-                                    if "Station ID" in c[0].text: station_id = c[1].text.strip()
-                                    if "Operator" in c[0].text: operator_id = c[1].text.strip()
+                            
+                            # Station & Operator ID find karna
+                            rows = soup.find_all("tr")
+                            for row in rows:
+                                cols = row.find_all("td")
+                                if len(cols) >= 2:
+                                    txt = cols[0].text.strip()
+                                    if "Station ID" in txt: station_id = cols[1].text.strip()
+                                    if "Operator" in txt: operator_id = cols[1].text.strip()
+                            
+                            # Data rows find karna (Regex se)
+                            for row in rows:
+                                tds = [td.text.strip() for td in row.find_all("td")]
+                                if len(tds) > 5 and re.search(r'\d{14,}', tds[1]): # EID mil gaya
+                                    eid = tds[1]
+                                    # EID format: ...YYYY/MM/DD... ya ...YYYYMMDD...
+                                    # Date nikalne ka robust tarika (2024/12/23 ya 20241223)
+                                    match = re.search(r'(\d{4})/?(\d{2})/?(\d{2})', eid)
+                                    if match:
+                                        found_date = f"{match.group(3)}/{match.group(2)}/{match.group(1)}"
+                                        # Amount last se pehle wala column hota hai aksar
+                                        amt_str = tds[-2].replace("Rs.", "").strip()
+                                        amt = float(amt_str) if amt_str.replace('.', '').isdigit() else 0
+                                        
+                                        # Entry type (Enrolment ya Update)
+                                        is_update = "Update" in str(tds)
+                                        master_data.append({"date": found_date, "amount": amt, "is_update": is_update})
 
-                        for df in all_tabs:
-                            df.columns = [str(col).strip().lower() for col in df.columns]
-                            if "no. of enrolments" in df.columns:
-                                date_summary_table = df[df['date'].str.contains(r'\d{2}/\d{2}/\d{4}', na=False)]
-                            if "enrolment no. and date" in df.columns:
-                                details_table = df
-
-                op_name = OPERATOR_MAP.get(operator_id, "Unknown")
-                if station_id and date_summary_table is not None:
+                if station_id and master_data:
+                    df_all = pd.DataFrame(master_data)
                     try: worksheet = spreadsheet.worksheet(str(station_id))
                     except: worksheet = spreadsheet.add_worksheet(title=str(station_id), rows="1000", cols="10")
 
                     existing_data = worksheet.get_all_values()
                     flat_existing = " ".join([r[0] for r in existing_data])
 
-                    # Smart Filtering
-                    new_dates_df = date_summary_table[~date_summary_table['date'].apply(lambda x: x in flat_existing)]
-                    dup_dates = date_summary_table[date_summary_table['date'].apply(lambda x: x in flat_existing)]['date'].tolist()
+                    # 1. Duplicate Filtering
+                    all_dates = df_all['date'].unique().tolist()
+                    new_dates = [d for d in all_dates if d not in flat_existing]
+                    dup_dates = [d for d in all_dates if d in flat_existing]
 
-                    if len(new_dates_df) == 0:
-                        st.error(f"🛑 Duplicate Alert! Range {file_range} pehle se sheet mein hai. Aage ki entry karein.")
+                    if not new_dates:
+                        st.error(f"🛑 Duplicate Alert! File ki dates pehle se sheet mein hain.")
                     else:
-                        # Calculation from Nayi Dates
-                        new_dates_list = new_dates_df['date'].tolist()
-                        enrol = pd.to_numeric(new_dates_df["no. of enrolments"], errors='coerce').sum()
-                        update = pd.to_numeric(new_dates_df["no. of updates"], errors='coerce').sum()
-                        total_ent = pd.to_numeric(new_dates_df["total"], errors='coerce').sum()
+                        # 2. Filter only New Data
+                        df_new = df_all[df_all['date'].isin(new_dates)]
                         
-                        # Amount from Application No. Date Matching
-                        total_amt = 0
-                        if details_table is not None:
-                            for index, row in details_table.iterrows():
-                                eid = str(row['enrolment no. and date'])
-                                # EID se date nikalna (2024/12/23 -> 23/12/2024)
-                                if len(eid) >= 22:
-                                    # UIDAI format: ...YYYYMMDD...
-                                    e_date = f"{eid[19:21]}/{eid[17:19]}/{eid[13:17]}" 
-                                    if e_date in new_dates_list:
-                                        amt = str(row.iloc[-2]).replace("Rs.", "").strip()
-                                        total_amt += pd.to_numeric(amt, errors='coerce')
+                        total_amt = int(df_new['amount'].sum())
+                        total_ent = len(df_new)
+                        updates = len(df_new[df_new['is_update'] == True])
+                        enrols = total_ent - updates
+                        
+                        avg_val = round(total_ent / len(new_dates), 2)
+                        new_range_str = f"{new_dates[0]} to {new_dates[-1]}"
+                        
+                        # Sort Key
+                        sort_key = datetime.strptime(new_dates[0], "%d/%m/%Y").strftime("%Y%m%d")
 
-                        avg_val = round(total_ent / len(new_dates_df), 2)
-                        new_range_str = f"{new_dates_df['date'].iloc[-1]} to {new_dates_df['date'].iloc[0]}"
-                        sort_key = datetime.strptime(new_dates_df['date'].iloc[-1], "%d/%m/%Y").strftime("%Y%m%d")
-
-                        # FINAL APPEND
-                        worksheet.append_row([new_range_str, station_id, op_name, operator_id, int(enrol), int(update), int(total_ent), int(total_amt), avg_val, sort_key])
+                        # 3. Final Append
+                        worksheet.append_row([new_range_str, station_id, OPERATOR_MAP.get(operator_id, "Unknown"), operator_id, enrols, updates, total_ent, total_amt, avg_val, sort_key])
                         worksheet.sort((10, 'asc'))
 
-                        # SHOW PURPOSE MESSAGE FOR OPERATOR
+                        # 4. Success UI
                         if dup_dates:
-                            st.markdown(f"""
-                            <div class="dup-info">
-                                ℹ️ Note: Aapki file mein se {min(dup_dates)} se {max(dup_dates)} tak ki entry duplicate thi jo pehle se ho chuki thi.<br>
-                                Par aap tension na lein, system ne baki bachi dates ({new_range_str}) ki nayi entry kar di hai!
-                            </div>
-                            """, unsafe_allow_html=True)
+                            st.markdown(f"<div class='dup-info'>ℹ️ Note: {len(dup_dates)} purani dates skip kar di gayi hain. Baki {len(new_dates)} nayi dates save ho gayi!</div>", unsafe_allow_html=True)
 
                         st.markdown(f"""
                         <div class="success-card">
-                            <b style="font-size:20px;">✅ SUCCESS: Nayi Report Save Ho Gayi!</b><br><br>
-                            👤 <b>Operator:</b> {op_name}<br>
-                            📅 <b>Saved Dates:</b> {new_range_str}<br>
-                            💰 <b>Total Amount:</b> ₹{int(total_amt)}
+                            ✅ <b>SUCCESS: Data Processed!</b><br>
+                            📅 Range: {new_range_str} | 💰 Amount: ₹{total_amt}<br>
+                            📊 Total Enrolment: {total_ent} | 📈 Average: {avg_val}
                         </div>
                         """, unsafe_allow_html=True)
+                        
+                        # Display Table for verification
+                        summary_df = df_new.groupby('date').size().reset_index(name='Total')
+                        st.table(summary_df)
 
                 shutil.rmtree(extract_dir)
         except Exception as e:
-            st.error(f"Error: {e}")
+            st.error(f"Technical Error: {e}")
