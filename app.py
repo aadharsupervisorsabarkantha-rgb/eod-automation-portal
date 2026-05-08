@@ -8,7 +8,11 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
 
-st.set_page_config(page_title="EOD Professional Portal", layout="centered")
+# ---------------- PAGE CONFIG ----------------
+st.set_page_config(
+    page_title="EOD Professional Portal",
+    layout="centered"
+)
 
 # ---------------- OPERATOR DATABASE ----------------
 OPERATOR_MAP = {
@@ -29,38 +33,42 @@ OPERATOR_MAP = {
     "GJPE_SBK_NS101344": "PARMAR RAVINDRA"
 }
 
-# ---------------- STYLING ----------------
+# ---------------- CSS ----------------
 st.markdown("""
 <style>
-.main-box {
-    padding: 20px;
-    border-radius: 12px;
-    background-color: #d32f2f;
-    color: white;
-    text-align: center;
-    margin-bottom: 20px;
+
+.main-box{
+    padding:20px;
+    border-radius:12px;
+    background:#d32f2f;
+    color:white;
+    text-align:center;
+    margin-bottom:20px;
 }
-.success-card {
-    padding: 20px;
-    border-radius: 10px;
-    background-color: #f0fdf4;
-    border: 1px solid #16a34a;
-    margin-top: 15px;
-    color: #166534;
+
+.success-card{
+    padding:20px;
+    border-radius:12px;
+    background:#f0fdf4;
+    border:1px solid #16a34a;
+    color:#166534;
+    margin-top:15px;
 }
-.warning-box {
-    padding: 15px;
-    background-color: #fef2f2;
-    border: 1px solid #dc2626;
-    color: #991b1b;
-    border-radius: 10px;
-    margin-top: 10px;
-    font-weight: bold;
+
+.warning-box{
+    padding:15px;
+    border-radius:10px;
+    background:#fef2f2;
+    border:1px solid #dc2626;
+    color:#991b1b;
+    margin-top:10px;
+    font-weight:bold;
 }
+
 </style>
 
 <div class="main-box">
-<b style="font-size: 22px;">🏦 STATION EOD AUTOMATION SYSTEM</b>
+<h2>🏦 STATION EOD AUTOMATION SYSTEM</h2>
 </div>
 """, unsafe_allow_html=True)
 
@@ -77,9 +85,9 @@ with col2:
     st.selectbox(
         "Month",
         [
-            "January", "February", "March", "April",
-            "May", "June", "July", "August",
-            "September", "October", "November", "December"
+            "January","February","March","April",
+            "May","June","July","August",
+            "September","October","November","December"
         ],
         index=datetime.now().month - 1
     )
@@ -91,7 +99,10 @@ with col3:
         index=2
     )
 
-zip_password = st.text_input("Enter ZIP Password", type="password")
+zip_password = st.text_input(
+    "Enter ZIP Password",
+    type="password"
+)
 
 uploaded_files = st.file_uploader(
     "Upload ZIP Reports",
@@ -99,7 +110,7 @@ uploaded_files = st.file_uploader(
     accept_multiple_files=True
 )
 
-# ---------------- MAIN PROCESS ----------------
+# ---------------- PROCESS ----------------
 if st.button("🚀 FINAL SUBMIT & PROCESS"):
 
     if not uploaded_files:
@@ -112,7 +123,7 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
 
     try:
 
-        # ---------------- GOOGLE SHEETS LOGIN ----------------
+        # ---------------- GOOGLE SHEET LOGIN ----------------
         creds_dict = st.secrets["gcp_service_account"]
 
         scope = [
@@ -148,7 +159,7 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                     ]
 
                     if not html_files:
-                        st.warning(f"⚠️ No HTML files found in {uploaded_file.name}")
+                        st.warning("⚠️ No HTML file found")
                         continue
 
                     # ---------------- HTML LOOP ----------------
@@ -169,18 +180,19 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
 
                             station_id = None
                             operator_id = None
-                            all_entries = []
                             summary_table_ui = None
+                            all_entries = []
 
-                            # ---------------- TABLE EXTRACTION ----------------
+                            # ---------------- SUMMARY TABLE ----------------
                             try:
-                                tabs = pd.read_html(io.StringIO(content))
+                                tables = pd.read_html(io.StringIO(content))
                             except:
-                                tabs = []
+                                tables = []
 
-                            for t in tabs:
+                            for t in tables:
 
                                 try:
+
                                     t.columns = [
                                         str(c).strip().lower()
                                         for c in t.columns
@@ -191,12 +203,7 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                         and "no. of enrolments" in t.columns
                                     ):
 
-                                        summary_table_ui = t[
-                                            t["date"].astype(str).str.contains(
-                                                r'\d{2}/\d{2}/\d{4}',
-                                                na=False
-                                            )
-                                        ]
+                                        summary_table_ui = t
 
                                 except:
                                     pass
@@ -212,52 +219,58 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                 if len(tds) < 2:
                                     continue
 
-                                # DEBUG
-                                # st.write(tds)
-
-                                # Station ID
+                                # ---------------- STATION ID ----------------
                                 if "Station ID" in tds[0]:
                                     station_id = tds[1]
 
-                                # Operator
+                                # ---------------- OPERATOR ID ----------------
                                 if "Operator" in tds[0]:
                                     operator_id = tds[1]
 
-                                # ---------------- DATE ENTRY ----------------
-                                joined = " ".join(tds)
+                                # ---------------- EID DATE EXTRACTION ----------------
+                                eid_found = None
 
-                                date_match = re.search(
-                                    r'(\d{4})/(\d{2})/(\d{2})',
-                                    joined
-                                )
+                                for x in tds:
 
-                                if date_match:
+                                    x = x.strip()
+
+                                    # 28 digit EID
+                                    if re.fullmatch(r"\d{28}", x):
+                                        eid_found = x
+                                        break
+
+                                if eid_found:
 
                                     try:
 
-                                        d_str = (
-                                            f"{date_match.group(3)}/"
-                                            f"{date_match.group(2)}/"
-                                            f"{date_match.group(1)}"
+                                        # Hidden date inside EID
+                                        hidden_date = eid_found[12:20]
+
+                                        d_obj = datetime.strptime(
+                                            hidden_date,
+                                            "%Y%m%d"
                                         )
 
-                                        # Type Logic
-                                        txn_type = ""
+                                        d_str = d_obj.strftime("%d/%m/%Y")
+
+                                        # ---------------- TYPE ----------------
+                                        txn_type = "E"
 
                                         for x in tds:
-                                            if x.strip().upper() in ["E", "U"]:
-                                                txn_type = x.strip().upper()
+
+                                            val = x.strip().upper()
+
+                                            if val in ["E", "U"]:
+                                                txn_type = val
                                                 break
 
-                                        if txn_type == "":
-                                            txn_type = "E"
-
-                                        # Amount Logic
+                                        # ---------------- AMOUNT ----------------
                                         f_amt = 0.0
 
                                         for x in reversed(tds):
 
                                             try:
+
                                                 amt_text = (
                                                     x.replace("Rs.", "")
                                                      .replace("Rs", "")
@@ -274,6 +287,7 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                             except:
                                                 pass
 
+                                        # ---------------- SAVE ENTRY ----------------
                                         all_entries.append({
                                             "date": d_str,
                                             "type": txn_type,
@@ -281,7 +295,9 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                         })
 
                                     except Exception as e:
-                                        st.warning(f"Row parse error: {e}")
+                                        st.warning(
+                                            f"EID Parse Error: {e}"
+                                        )
 
                             # ---------------- OPERATOR NAME ----------------
                             op_name = OPERATOR_MAP.get(
@@ -290,12 +306,13 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                             )
 
                             # ---------------- DATAFRAME ----------------
-                            if station_id and len(all_entries) > 0:
+                            if station_id and all_entries:
 
                                 df = pd.DataFrame(all_entries)
 
                                 # ---------------- WORKSHEET ----------------
                                 try:
+
                                     worksheet = spreadsheet.worksheet(
                                         str(station_id)
                                     )
@@ -312,23 +329,23 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                         "Date",
                                         "Station ID",
                                         "Operator",
-                                        "ID",
+                                        "Operator ID",
                                         "Enrol",
                                         "Update",
                                         "Total",
                                         "Amount"
                                     ])
 
-                                # ---------------- EXISTING DATA ----------------
+                                # ---------------- EXISTING DATES ----------------
                                 existing_data = worksheet.get_all_values()
 
                                 existing_dates = []
 
                                 if len(existing_data) > 1:
+
                                     existing_dates = [
-                                        r[0]
-                                        for r in existing_data[1:]
-                                        if len(r) > 0
+                                        row[0]
+                                        for row in existing_data[1:]
                                     ]
 
                                 # ---------------- UNIQUE DATES ----------------
@@ -364,7 +381,9 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
 
                                     total = len(day_df)
 
-                                    amount = int(day_df["amt"].sum())
+                                    amount = int(
+                                        day_df["amt"].sum()
+                                    )
 
                                     worksheet.append_row([
                                         d,
@@ -384,9 +403,10 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
 
                                     st.markdown(f"""
                                     <div class="success-card">
-                                    <b style="font-size:18px;">
-                                    ✅ DATA SAVED SUCCESSFULLY!
-                                    </b><br><br>
+
+                                    <h3>
+                                    ✅ DATA SAVED SUCCESSFULLY
+                                    </h3>
 
                                     👤 <b>Operator:</b> {op_name}<br>
 
@@ -394,13 +414,34 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
 
                                     📅 <b>Dates Added:</b>
                                     {newly_added[0]} to {newly_added[-1]}
+
                                     </div>
                                     """, unsafe_allow_html=True)
 
                                     # ---------------- SUMMARY TABLE ----------------
                                     if summary_table_ui is not None:
+
                                         st.write("### 📊 Report Summary")
+
                                         st.table(summary_table_ui)
+
+                                    # ---------------- DAILY SUMMARY ----------------
+                                    st.write("### 📅 Date Wise Summary")
+
+                                    daily_summary = (
+                                        df.groupby("date")
+                                        .agg(
+                                            Enrol=("type",
+                                                   lambda x: (x == "E").sum()),
+                                            Update=("type",
+                                                    lambda x: (x == "U").sum()),
+                                            Total=("type", "count"),
+                                            Amount=("amt", "sum")
+                                        )
+                                        .reset_index()
+                                    )
+
+                                    st.dataframe(daily_summary)
 
                                     # ---------------- AVERAGE ----------------
                                     avg_val = round(
@@ -416,10 +457,12 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                         )
 
                                         st.markdown(f"""
-                                        <div class='warning-box'>
+                                        <div class="warning-box">
+
                                         ⚠️ Warning:
                                         Aapka average {avg_val} hai.
                                         Minimum 15 chahiye!
+
                                         </div>
                                         """, unsafe_allow_html=True)
 
@@ -435,29 +478,33 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
 
                                     st.info(
                                         f"ℹ️ {station_id}: "
-                                        f"Sari dates already available hain."
+                                        f"Sari dates already sheet me hain."
                                     )
 
                             else:
 
                                 st.warning(
-                                    f"⚠️ Station data nahi mila in {html_file}"
+                                    "⚠️ Station ID ya transaction data nahi mila"
                                 )
 
                         except Exception as e:
+
                             st.error(
-                                f"❌ HTML Process Error ({html_file}) : {str(e)}"
+                                f"❌ HTML Processing Error: {str(e)}"
                             )
 
             except RuntimeError:
+
                 st.error(
                     f"❌ Wrong ZIP Password: {uploaded_file.name}"
                 )
 
             except Exception as e:
+
                 st.error(
-                    f"❌ ZIP Error ({uploaded_file.name}) : {str(e)}"
+                    f"❌ ZIP Error: {str(e)}"
                 )
 
     except Exception as e:
+
         st.error(f"🚨 Main Error: {str(e)}")
