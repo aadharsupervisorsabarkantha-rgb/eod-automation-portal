@@ -24,7 +24,6 @@ OPERATOR_MAP = {
     "GJPE_SBK_NS776405": "BAROT APURVA",
     "GJPE_SBK_NS829265": "VANKAR TEJALBEN",
     "GJPE_SBK_NS442326": "MANSURI VARISH",
-    "GJPE_SBK_NS701346": "DABHI SAGAR",
     "GJPE_SBR_NS737401": "DABHI BIBIBEN",
     "GJPE_SBK_NS101344": "PARMAR RAVINDRA"
 }
@@ -32,32 +31,27 @@ OPERATOR_MAP = {
 # --- STYLING ---
 st.markdown("""
     <style>
-    .strict-penalty-box { padding: 20px; border-radius: 12px; background-color: #d32f2f; color: #ffffff; text-align: center; border: 4px solid #f44336; margin-bottom: 30px; }
+    .main-box { padding: 20px; border-radius: 12px; background-color: #d32f2f; color: white; text-align: center; margin-bottom: 20px; }
+    .success-card { padding: 20px; border-radius: 10px; background-color: #e8f5e9; border-left: 8px solid #2e7d32; margin-top: 15px; color: #1b5e20; }
+    .warning-card { padding: 15px; border-radius: 10px; background-color: #fff3e0; border-left: 8px solid #ef6c00; color: #e65100; margin-top: 10px; font-weight: bold; }
     </style>
-    <div class="strict-penalty-box">
-        <b style="font-size: 22px;">🚫 ATTENTION OPERATOR 🚫</b><br>
-        Data Accuracy: Upload se pehle Date Range check karein. <b>Mismatch par PENALTY lagegi!</b>
-    </div>
+    <div class="main-box"><b style="font-size: 22px;">🏦 STATION EOD AUTOMATION SYSTEM</b></div>
     """, unsafe_allow_html=True)
 
-st.title("🏦 Station EOD Automation")
-
 # --- INPUTS ---
-st.subheader("1️⃣ Details & File")
 col1, col2, col3 = st.columns(3)
-with col1: ui_date_range = st.selectbox("Expected Date Range", ["01 to 08", "09 to 16", "17 to 24", "25 to 31"])
+with col1: ui_date_range = st.selectbox("Date Range", ["01 to 08", "09 to 16", "17 to 24", "25 to 31"])
 with col2: selected_month = st.selectbox("Month", ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"], index=datetime.now().month - 1)
 with col3: selected_year = st.selectbox("Year", [2025, 2026], index=0)
 
-zip_password = st.text_input("ZIP File ka Password dalein", type="password")
-uploaded_files = st.file_uploader("ZIP Files Upload Karein", type="zip", accept_multiple_files=True)
+zip_password = st.text_input("Enter ZIP Password", type="password")
+uploaded_files = st.file_uploader("Upload ZIP Reports", type="zip", accept_multiple_files=True)
 
 if st.button("🚀 FINAL SUBMIT & PROCESS"):
     if not uploaded_files or not zip_password:
-        st.error("❌ Password aur File check karein!")
+        st.error("❌ Password aur File zaroori hai!")
     else:
         try:
-            # Google Sheets Authentication
             creds_dict = st.secrets["gcp_service_account"]
             scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
             creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
@@ -69,24 +63,23 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                 os.makedirs(extract_dir, exist_ok=True)
                 
                 with pyzipper.AESZipFile(uploaded_file) as zf:
-                    try:
-                        zf.extractall(extract_dir, pwd=zip_password.encode())
-                    except:
-                        st.error(f"🚨 GALAT PASSWORD for {uploaded_file.name}!")
+                    try: zf.extractall(extract_dir, pwd=zip_password.encode())
+                    except: 
+                        st.error(f"🚨 Password galat hai: {uploaded_file.name}")
                         continue
 
                 station_id, file_date, operator_id = None, None, None
                 enrol, update, total_ent, total_sum = 0, 0, 0, 0
-                summary_df = None
+                date_summary_table = None
 
-                # Extracting Data from HTML
                 for file in os.listdir(extract_dir):
                     if file.endswith(".html"):
                         path = os.path.join(extract_dir, file)
                         with open(path, "r", encoding="utf-8", errors="ignore") as f:
                             soup = BeautifulSoup(f.read(), "html.parser")
                             text = soup.get_text(" ", strip=True)
-                            d_match = re.search(r"Report Generated for Date:\s*(\d{2}/\d{2}/\d{4}\s*to\s*\d{2}/\d{2}/\d{4})", text, re.I)
+                            
+                            d_match = re.search(r"Date:\s*(\d{2}/\d{2}/\d{4}\s*to\s*\d{2}/\d{2}/\d{4})", text)
                             if d_match: file_date = d_match.group(1)
                             for row in soup.find_all("tr"):
                                 c = row.find_all("td")
@@ -94,64 +87,69 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                     if "Station ID" in c[0].text: station_id = c[1].text.strip()
                                     if "Operator" in c[0].text: operator_id = c[1].text.strip()
                             
-                            try:
-                                all_tabs = pd.read_html(path)
-                                for df in all_tabs:
-                                    df.columns = [str(col).strip().lower() for col in df.columns]
-                                    if "total" in df.columns and "no. of enrolments" in df.columns:
-                                        summary_df = df
-                                        enrol = pd.to_numeric(df["no. of enrolments"], errors='coerce').sum()
-                                        update = pd.to_numeric(df["no. of updates"], errors='coerce').sum()
-                                        total_ent = pd.to_numeric(df["total"], errors='coerce').sum()
-                                    amt_col = next((c for c in df.columns if "total amount charged" in c), None)
-                                    if amt_col:
-                                        total_sum += pd.to_numeric(df[amt_col].astype(str).str.replace(r"[^\d.]", "", regex=True), errors='coerce').sum()
-                            except: pass
+                            all_tabs = pd.read_html(path)
+                            for df in all_tabs:
+                                df.columns = [str(col).strip().lower() for col in df.columns]
+                                if "no. of enrolments" in df.columns and "date" in df.columns:
+                                    df = df[df['date'].str.contains(r'\d{2}/\d{2}/\d{4}', na=False)]
+                                    date_summary_table = df
+                                    enrol = pd.to_numeric(df["no. of enrolments"], errors='coerce').sum()
+                                    update = pd.to_numeric(df["no. of updates"], errors='coerce').sum()
+                                    total_ent = pd.to_numeric(df["total"], errors='coerce').sum()
+
+                            for df in all_tabs:
+                                amt_col = next((c for c in df.columns if "total amount charged" in c), None)
+                                if amt_col:
+                                    total_sum += pd.to_numeric(df[amt_col].astype(str).str.replace(r"[^\d.]", "", regex=True), errors='coerce').sum()
 
                 op_name = OPERATOR_MAP.get(operator_id, "Unknown")
                 
-                # --- SECURITY & SORTING LOGIC ---
                 if station_id:
                     try: 
                         worksheet = spreadsheet.worksheet(str(station_id))
                         existing_data = worksheet.get_all_values()
                         
-                        # 1. Duplicate Check
-                        is_duplicate = False
-                        for row in existing_data:
-                            if file_date == row[0]: # Date Range match
-                                is_duplicate = True
-                                break
-                        
-                        if is_duplicate:
-                            st.error(f"🛑 ENTRY DENIED: Is Date ki entry pehle ho chuki hai!")
+                        if any(file_date == row[0] for row in existing_data):
+                            st.error(f"⚠️ Duplicate Entry: {file_date} pehle se record mein hai!")
+                        else:
+                            # --- Day-wise Average ---
+                            days_worked = len(date_summary_table) if date_summary_table is not None else 1
+                            avg_val = round(total_ent / days_worked, 2)
+                            
+                            # --- Smart Sorting Key ---
+                            month_num = str(datetime.strptime(selected_month, '%B').month).zfill(2)
+                            sort_key = f"{selected_year}{month_num}{ui_date_range[:2]}"
+                            
+                            # Append & Sort (J Column / 10th position)
+                            worksheet.append_row([file_date, station_id, op_name, operator_id, int(enrol), int(update), int(total_ent), int(total_sum), avg_val, sort_key])
+                            worksheet.sort((10, 'asc'))
+                            
+                            # --- DETAILED SUCCESS CARD ---
                             st.markdown(f"""
-                                <div style="padding:15px; border-radius:10px; border:2px solid #ff4b4b; background-color:#ffebee; color:#b71c1c; text-align:center;">
-                                    <b>Duplicate Entry:</b> Date Range <b>{file_date}</b> pehle se record mein hai.<br>
-                                    Kripya aage ki dates ki entry karein.
+                            <div class="success-card">
+                                <b style="font-size:20px;">✅ SUCCESS: Report Record Saved!</b><br><br>
+                                👤 <b>Operator:</b> {op_name} | 📍 <b>Station:</b> {station_id}<br>
+                                🗓️ <b>Range:</b> {ui_date_range} {selected_month} {selected_year}<br>
+                                📈 <b>Daily Average:</b> {avg_val}
+                            </div>
+                            """, unsafe_allow_html=True)
+                            
+                            if avg_val < 15:
+                                st.markdown(f"""
+                                <div class="warning-card">
+                                    ⚠️ Aapki average kam hai ({avg_val}). Kripya entry jyada karein!
                                 </div>
                                 """, unsafe_allow_html=True)
-                        else:
-                            # 2. Append Data
-                            worksheet.append_row([file_date, station_id, op_name, operator_id, int(enrol), int(update), int(total_ent), int(total_sum)])
-                            
-                            # 3. Automatic Sorting (Order by Date Column A)
-                            # Header (row 1) ko chod kar baaki data sort karega
-                            worksheet.sort((1, 'asc'))
-                            
-                            st.success(f"✅ Success: Data saved and sorted for {op_name}!")
-                            st.markdown(f"📍 **Station:** `{station_id}` | 👤 **Operator:** `{op_name}`")
-                            if summary_df is not None:
-                                st.table(summary_df)
+
+                            if date_summary_table is not None:
+                                st.subheader("📊 Date-wise Performance Table")
+                                st.table(date_summary_table[['date', 'no. of enrolments', 'no. of updates', 'total']])
 
                     except gspread.exceptions.WorksheetNotFound:
-                        # New Station Sheet
-                        worksheet = spreadsheet.add_worksheet(title=str(station_id), rows="1000", cols="10")
-                        worksheet.append_row(["Date Range", "Station ID", "Operator Name", "Operator ID", "Enrol", "Update", "Total", "Amount"])
-                        worksheet.append_row([file_date, station_id, op_name, operator_id, int(enrol), int(update), int(total_ent), int(total_sum)])
-                        st.success(f"✅ New Station `{station_id}` record started!")
-                
-                shutil.rmtree(extract_dir)
+                        worksheet = spreadsheet.add_worksheet(title=str(station_id), rows="1000", cols="11")
+                        worksheet.append_row(["Date Range", "Station ID", "Operator", "ID", "Enrol", "Update", "Total", "Amount", "Avg", "SortKey"])
+                        st.info(f"New Station Sheet `{station_id}` created. Please re-upload your file.")
 
+                shutil.rmtree(extract_dir)
         except Exception as e:
             st.error(f"Error: {e}")
