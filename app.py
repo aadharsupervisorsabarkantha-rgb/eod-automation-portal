@@ -38,12 +38,7 @@ st.markdown("""
     <div class="main-box"><b style="font-size: 22px;">🏦 STATION EOD AUTOMATION SYSTEM</b></div>
     """, unsafe_allow_html=True)
 
-# --- INPUTS (Sirf UI ke liye, logic ab File se chalega) ---
-col1, col2, col3 = st.columns(3)
-with col1: st.selectbox("Select Date Range", ["01 to 08", "09 to 16", "17 to 24", "25 to 31"])
-with col2: st.selectbox("Month", ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"], index=datetime.now().month - 1)
-with col3: st.selectbox("Year", [2025, 2026], index=0)
-
+# UI Inputs
 zip_password = st.text_input("Enter ZIP Password", type="password")
 uploaded_files = st.file_uploader("Upload ZIP Reports", type="zip", accept_multiple_files=True)
 
@@ -79,7 +74,6 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                             soup = BeautifulSoup(f.read(), "html.parser")
                             text = soup.get_text(" ", strip=True)
                             
-                            # 1. ACTUAL Range extract karna (Report Generated for Date ke aage se)
                             d_match = re.search(r"Date:\s*(\d{2}/\d{2}/\d{4}\s*to\s*\d{2}/\d{2}/\d{4})", text)
                             if d_match: file_date = d_match.group(1)
                             
@@ -89,7 +83,6 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                     if "Station ID" in c[0].text: station_id = c[1].text.strip()
                                     if "Operator" in c[0].text: operator_id = c[1].text.strip()
                             
-                            # 2. Date-wise Table extract karna
                             all_tabs = pd.read_html(path)
                             for df in all_tabs:
                                 df.columns = [str(col).strip().lower() for col in df.columns]
@@ -110,57 +103,54 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                 if station_id:
                     try: 
                         worksheet = spreadsheet.worksheet(str(station_id))
-                        existing_data = worksheet.get_all_values()
-                        
-                        # Duplicate Check
-                        if any(file_date == row[0] for row in existing_data):
-                            st.error(f"⚠️ Duplicate Entry: {file_date} pehle se record mein hai!")
-                        else:
-                            # --- CALCULATIONS ---
-                            # Table mein jitni dates hain unhi se divide karenge
-                            days_worked = len(date_summary_table) if date_summary_table is not None else 1
-                            avg_val = round(total_ent / days_worked, 2)
-                            
-                            # Smart Sorting Key (File ki date se extract kiya hua)
-                            start_date_str = file_date.split(' to ')[0].strip()
-                            temp_dt = datetime.strptime(start_date_str, "%d/%m/%Y")
-                            sort_key = temp_dt.strftime("%Y%m%d") # Format: 20241215
-                            
-                            # 3. APPEND (Sirf H Column tak, Avg/SortKey background mein rahenge)
-                            worksheet.append_row([
-                                file_date, station_id, op_name, operator_id, 
-                                int(enrol), int(update), int(total_ent), int(total_sum), avg_val, sort_key
-                            ])
-                            
-                            # J Column (SortKey) ke basis par sort karein
-                            worksheet.sort((10, 'asc'))
-                            
-                            # --- DETAILED SUCCESS CARD (File se li gayi range dikhayega) ---
-                            st.markdown(f"""
-                            <div class="success-card">
-                                <b style="font-size:20px;">✅ SUCCESS: Report Saved!</b><br><br>
-                                👤 <b>Operator:</b> {op_name} | 📍 <b>Station:</b> {station_id}<br>
-                                📅 <b>Actual Range in File:</b> <span style="color:#d32f2f; font-weight:bold;">{file_date}</span><br>
-                                📊 <b>Total:</b> {int(total_ent)} | 📈 <b>Daily Average:</b> {avg_val}
-                            </div>
-                            """, unsafe_allow_html=True)
-                            
-                            if avg_val < 15:
-                                st.markdown(f"""
-                                <div class="warning-card">
-                                    ⚠️ Aapki average kam hai ({avg_val}). Kripya entry jyada karein!
-                                </div>
-                                """, unsafe_allow_html=True)
-
-                            # --- SHOW DATE TABLE ---
-                            if date_summary_table is not None:
-                                st.subheader("📊 Date-wise Performance Table (As per File)")
-                                st.table(date_summary_table[['date', 'no. of enrolments', 'no. of updates', 'total']])
-
                     except gspread.exceptions.WorksheetNotFound:
                         worksheet = spreadsheet.add_worksheet(title=str(station_id), rows="1000", cols="10")
                         worksheet.append_row(["Date Range", "Station ID", "Operator", "ID", "Enrol", "Update", "Total", "Amount", "Avg", "SortKey"])
-                        st.info(f"New Station Sheet `{station_id}` created. Please re-upload.")
+                        st.info(f"✨ New Station `{station_id}` created.")
+
+                    existing_data = worksheet.get_all_values()
+                    
+                    # --- NEW SMART DUPLICATE CHECK (Day-wise) ---
+                    file_dates_list = date_summary_table['date'].tolist() if date_summary_table is not None else []
+                    is_duplicate = False
+                    duplicate_dates = []
+
+                    # Sheet mein Column A mein jo ranges hain, unhe check karna
+                    for row in existing_data:
+                        existing_range = row[0]
+                        for f_date in file_dates_list:
+                            if f_date in existing_range:
+                                is_duplicate = True
+                                duplicate_dates.append(f_date)
+                    
+                    if is_duplicate:
+                        st.error(f"🛑 Duplicate Data Found! Is file mein dates {', '.join(list(set(duplicate_dates)))} pehle se sheet mein maujood hain.")
+                    else:
+                        # Process entry
+                        days_worked = len(date_summary_table) if date_summary_table is not None else 1
+                        avg_val = round(total_ent / days_worked, 2)
+                        
+                        start_date_str = file_date.split(' to ')[0].strip()
+                        temp_dt = datetime.strptime(start_date_str, "%d/%m/%Y")
+                        sort_key = temp_dt.strftime("%Y%m%d")
+                        
+                        worksheet.append_row([file_date, station_id, op_name, operator_id, int(enrol), int(update), int(total_ent), int(total_sum), avg_val, sort_key])
+                        worksheet.sort((10, 'asc'))
+                        
+                        st.markdown(f"""
+                        <div class="success-card">
+                            <b style="font-size:20px;">✅ SUCCESS: Report Saved!</b><br><br>
+                            👤 <b>Operator:</b> {op_name} | 📍 <b>Station:</b> {station_id}<br>
+                            📅 <b>Range:</b> {file_date}<br>
+                            📈 <b>Daily Average:</b> {avg_val}
+                        </div>
+                        """, unsafe_allow_html=True)
+                        
+                        if avg_val < 15:
+                            st.markdown(f"""<div class="warning-card">⚠️ Aapki average kam hai ({avg_val}). Entry badhayein!</div>""", unsafe_allow_html=True)
+
+                        if date_summary_table is not None:
+                            st.table(date_summary_table[['date', 'no. of enrolments', 'no. of updates', 'total']])
 
                 shutil.rmtree(extract_dir)
         except Exception as e:
