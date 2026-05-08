@@ -1,17 +1,15 @@
 import streamlit as st
 import pyzipper
-import io
-import re
+import io, re
 import pandas as pd
 from bs4 import BeautifulSoup
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
 
-# ---------------- PAGE CONFIG ----------------
 st.set_page_config(page_title="EOD Professional Portal", layout="wide")
 
-# ---------------- OPERATOR DATABASE ----------------
+# --- OPERATOR DATABASE ---
 OPERATOR_MAP = {
     "GJPE_SBK_NS603205": "RATHOD VIJAY", "GJPE_SBK_NS435053": "PATEL VIPUL",
     "GJPE_SBK_NS668733": "CHAUHAN CHANDUJI", "GJPE_SBK_NS716164": "DAYANI MADHUBEN",
@@ -23,7 +21,7 @@ OPERATOR_MAP = {
     "GJPE_SBK_NS101344": "PARMAR RAVINDRA"
 }
 
-# ---------------- CSS ----------------
+# --- CSS ---
 st.markdown("""
 <style>
 .main-box{ padding:20px; border-radius:15px; background:#d32f2f; color:white; text-align:center; margin-bottom:20px; }
@@ -33,7 +31,7 @@ st.markdown("""
 <div class="main-box"><h2>🏦 STATION EOD AUTOMATION SYSTEM</h2></div>
 """, unsafe_allow_html=True)
 
-# ---------------- UI ----------------
+# --- UI ---
 col1, col2, col3 = st.columns(3)
 with col1: st.selectbox("Date Range", ["01 to 08", "09 to 16", "17 to 24", "25 to 31"])
 with col2: st.selectbox("Month", ["January","February","March","April","May","June","July","August","September","October","November","December"], index=datetime.now().month - 1)
@@ -70,40 +68,41 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
 
                     # Summary Table for UI
                     try:
-                        tables = pd.read_html(io.StringIO(content))
-                        for t in tables:
+                        tabs = pd.read_html(io.StringIO(content))
+                        for t in tabs:
                             t.columns = [str(c).strip().lower() for c in t.columns]
                             if "date" in t.columns and "no. of enrolments" in t.columns:
                                 summary_table_ui = t[t['date'].str.contains(r'\d{2}/\d{2}/\d{4}', na=False)]
                     except: pass
 
-                    # Row Processing for all Dates
-                    for row in soup.find_all("tr"):
+                    # Table Rows Processing
+                    rows = soup.find_all("tr")
+                    for row in rows:
                         tds = [td.get_text(strip=True) for td in row.find_all("td")]
-                        if len(tds) < 2: continue
+                        if len(tds) < 10: continue
+                        
                         if "Station ID" in tds[0]: station_id = tds[1].strip()
                         if "Operator" in tds[0]: operator_id = tds[1].strip()
 
-                        eid_found = None
+                        # EID & Date Extraction
+                        eid_val = None
                         for x in tds:
                             digits = re.sub(r"\D", "", x)
-                            if len(digits) >= 20:
-                                eid_found = digits; break
+                            if len(digits) >= 20: eid_val = digits; break
 
-                        if eid_found:
+                        if eid_val:
                             try:
-                                # Extracting hidden date from EID
-                                h_date = datetime.strptime(eid_found[-14:-6], "%Y%m%d").strftime("%d/%m/%Y")
+                                h_date = datetime.strptime(eid_val[-14:-6], "%Y%m%d").strftime("%d/%m/%Y")
                                 txn_type = "E"
                                 for x in tds:
                                     if x.strip().upper() in ["E", "U"]: txn_type = x.strip().upper(); break
                                 
-                                f_amt = 0.0
-                                for x in reversed(tds):
-                                    try:
-                                        val = float(x.replace("Rs.", "").replace("Rs", "").replace(",", "").strip())
-                                        if val > 0: f_amt = val; break
-                                    except: pass
+                                # --- AMOUNT: TARGETING ONLY THE LAST COLUMN ---
+                                last_col_val = tds[-1].replace("Rs.", "").replace("Rs", "").replace(",", "").strip()
+                                f_amt = float(last_col_val) if last_col_val.replace('.', '', 1).isdigit() else 0.0
+                                
+                                # Safety: Agar amount 20 digit se bada hai toh woh galti se EID uth gaya hai
+                                if f_amt > 1000000: f_amt = 0.0
                                 
                                 all_entries.append({"date": h_date, "type": txn_type, "amt": f_amt})
                             except: continue
@@ -117,49 +116,37 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                             worksheet = spreadsheet.add_worksheet(title=str(station_id), rows="1000", cols="8")
                             worksheet.append_row(["Date", "Station ID", "Operator", "Operator ID", "Enrol", "Update", "Total", "Amount"])
 
-                        # --- STRONG DUPLICATE CHECK ---
                         existing_data = worksheet.get_all_values()
                         existing_dates = [r[0] for r in existing_data if len(r) > 0]
-                        
                         unique_dates_in_file = sorted(list(set(df["date"].tolist())), key=lambda x: datetime.strptime(x, "%d/%m/%Y"))
                         
                         newly_added = []
-                        duplicate_dates = []
-
                         for d in unique_dates_in_file:
-                            if d in existing_dates:
-                                duplicate_dates.append(d)
-                                continue
-                            
+                            if d in existing_dates: continue
                             day_df = df[df["date"] == d]
-                            enrol, update = len(day_df[day_df["type"] == "E"]), len(day_df[day_df['type'] == 'U'])
-                            total, amount = len(day_df), int(day_df["amt"].sum())
+                            enrol = len(day_df[day_df["type"] == "E"])
+                            update = len(day_df[day_df["type"] == "U"])
+                            total = len(day_df)
+                            amount = int(day_df["amt"].sum())
                             
                             worksheet.append_row([d, station_id, op_name, operator_id, enrol, update, total, amount])
                             newly_added.append(d)
 
-                        # --- UI FEEDBACK ---
-                        if duplicate_dates:
-                            st.warning(f"🛑 Duplicate skipped: {', '.join(duplicate_dates)} pehle se sheet mein hain.")
-
+                        # Feedback & Performance Popup
                         if newly_added:
-                            st.markdown(f"""
-                            <div class="success-card">
-                            <h3>✅ SAVED: {len(newly_added)} New Dates</h3>
-                            👤 <b>Operator:</b> {op_name} | 📍 <b>Station:</b> {station_id}<br>
-                            📅 <b>Range:</b> {newly_added[0]} to {newly_added[-1]}
-                            </div>
-                            """, unsafe_allow_html=True)
-                            st.table(summary_table_ui)
+                            st.markdown(f"""<div class="success-card"><h3>✅ SAVED: {len(newly_added)} New Dates</h3>
+                            👤 {op_name} | 📍 {station_id}<br>📅 {newly_added[0]} to {newly_added[-1]}</div>""", unsafe_allow_html=True)
                             
                             avg_val = round(len(df) / len(unique_dates_in_file), 2)
+                            st.write(f"### 📊 Report Stats: {avg_val} Avg")
+                            st.table(summary_table_ui)
+
                             if avg_val < 15:
-                                st.toast(f"🚨 Low Avg: {avg_val}")
-                                st.markdown(f"<div class='warning-box'>⚠️ Warning: Average {avg_val} kam hai!</div>", unsafe_allow_html=True)
-                            else: st.balloons()
-                        elif not duplicate_dates:
-                            st.error("⚠️ Data extract nahi ho paya. File check karein.")
-                    else:
-                        st.error("❌ Station ID ya HTML structure mein issue hai.")
+                                st.toast(f"🚨 Low Average Alert: {avg_val}", icon="⚠️")
+                                st.markdown(f"<div class='warning-box'>⚠️ Warning: Aapka average {avg_val} kam hai!</div>", unsafe_allow_html=True)
+                            else:
+                                st.balloons()
+                        else:
+                            st.warning(f"ℹ️ {station_id}: Data pehle se sheet mein hai.")
     except Exception as e:
         st.error(f"🚨 Error: {str(e)}")
