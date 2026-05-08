@@ -52,8 +52,10 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
             spreadsheet = client.open_by_key("19mlf7dpNJyyvnKYZpoJtjyQY6RkTaze4FsC7xCKnMrU")
 
             for uploaded_file in uploaded_files:
-                extract_dir = f"temp_{uploaded_file.name}"
+                extract_dir = f"temp_{uploaded_file.name.replace(' ', '_')}"
+                if os.path.exists(extract_dir): shutil.rmtree(extract_dir)
                 os.makedirs(extract_dir, exist_ok=True)
+                
                 with pyzipper.AESZipFile(uploaded_file) as zf:
                     try: zf.extractall(extract_dir, pwd=zip_password.encode())
                     except: st.error("🚨 Password Galat Hai!"); continue
@@ -62,31 +64,37 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                 all_entries = []
                 summary_table_ui = None
 
-                for file in os.listdir(extract_dir):
-                    if file.endswith(".html"):
-                        path = os.path.join(extract_dir, file)
-                        
-                        # UI Table nikalna
-                        tabs = pd.read_html(path)
-                        for t in tabs:
-                            t.columns = [str(c).lower() for c in t.columns]
-                            if "no. of enrolments" in t.columns:
-                                summary_table_ui = t[t['date'].str.contains(r'\d{2}/\d{2}/\d{4}', na=False)]
+                # Folder ke andar ghus kar file dhundhna (Fixes "No such file" error)
+                for root, dirs, files in os.walk(extract_dir):
+                    for file in files:
+                        if file.endswith(".html"):
+                            path = os.path.join(root, file)
+                            
+                            # UI Summary Table extraction
+                            try:
+                                tabs = pd.read_html(path)
+                                for t in tabs:
+                                    t.columns = [str(c).lower() for c in t.columns]
+                                    if "no. of enrolments" in t.columns:
+                                        summary_table_ui = t[t['date'].str.contains(r'\d{2}/\d{2}/\d{4}', na=False)]
+                            except: pass
 
-                        with open(path, "r", encoding="utf-8", errors="ignore") as f:
-                            soup = BeautifulSoup(f.read(), "html.parser")
-                            rows = soup.find_all("tr")
-                            for row in rows:
-                                tds = [td.get_text(strip=True) for td in row.find_all("td")]
-                                if len(tds) < 2: continue
-                                if "Station ID" in tds[0]: station_id = tds[1]
-                                if "Operator" in tds[0]: operator_id = tds[1]
-                                if len(tds) > 10 and "/" in tds[1]:
-                                    date_match = re.search(r'(\d{4})/(\d{2})/(\d{2})', tds[1])
-                                    if date_match:
-                                        d_str = f"{date_match.group(3)}/{date_match.group(2)}/{date_match.group(1)}"
-                                        f_amt = float(tds[-2].replace("Rs.", "").strip()) if tds[-2].replace('.','').isdigit() else 0.0
-                                        all_entries.append({"date": d_str, "type": tds[3].upper(), "amt": f_amt})
+                            with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                                soup = BeautifulSoup(f.read(), "html.parser")
+                                rows = soup.find_all("tr")
+                                for row in rows:
+                                    tds = [td.get_text(strip=True) for td in row.find_all("td")]
+                                    if len(tds) < 2: continue
+                                    if "Station ID" in tds[0]: station_id = tds[1]
+                                    if "Operator" in tds[0]: operator_id = tds[1]
+                                    
+                                    if len(tds) > 10 and "/" in tds[1]:
+                                        date_match = re.search(r'(\d{4})/(\d{2})/(\d{2})', tds[1])
+                                        if date_match:
+                                            d_str = f"{date_match.group(3)}/{date_match.group(2)}/{date_match.group(1)}"
+                                            # File ke charge column se uthana
+                                            f_amt = float(tds[-2].replace("Rs.", "").strip()) if tds[-2].replace('.','').isdigit() else 0.0
+                                            all_entries.append({"date": d_str, "type": tds[3].upper(), "amt": f_amt})
 
                 op_name = OPERATOR_MAP.get(operator_id, "Unknown")
 
@@ -110,6 +118,8 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                         update = len(day_df[day_df['type'] == 'U'])
                         total = len(day_df)
                         amount = int(day_df['amt'].sum())
+                        
+                        # I and J column logic removed for clean sheet
                         worksheet.append_row([d, station_id, op_name, operator_id, enrol, update, total, amount])
                         newly_added.append(d)
 
@@ -126,15 +136,16 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                         st.write("### 📊 Summary of Uploaded Report")
                         st.table(summary_table_ui)
                         
+                        # Average Calculation for alert
                         avg_val = round(len(df) / len(unique_dates), 2)
                         if avg_val < 15:
                             st.toast(f"🚨 Low Average Alert: {avg_val}", icon="⚠️")
-                            st.markdown(f"<div class='warning-box'>⚠️ Warning: Average {avg_val} hai. 15 se kam hai!</div>", unsafe_allow_html=True)
+                            st.markdown(f"<div class='warning-box'>⚠️ Warning: Aapka average {avg_val} hai. 15 se kam kaam hai, please badhayein!</div>", unsafe_allow_html=True)
                         else:
                             st.balloons()
                             st.success(f"🔥 Performance: {avg_val} Avg")
                     else:
-                        st.info("ℹ️ Sari dates pehle se sheet mein hain.")
+                        st.info("ℹ️ Sari dates pehle se sheet mein hain. Kuch bhi naya add nahi kiya gaya.")
 
                 shutil.rmtree(extract_dir)
         except Exception as e:
