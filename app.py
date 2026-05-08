@@ -188,30 +188,6 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                     operator_id = None
                     all_entries = []
 
-                    # =================================================
-                    # FIND AMOUNT COLUMN INDEX
-                    # =================================================
-
-                    amount_col_index = None
-
-                    all_rows = soup.find_all("tr")
-
-                    for r in all_rows:
-
-                        cols = [
-                            c.get_text(strip=True).lower()
-                            for c in r.find_all(["th", "td"])
-                        ]
-
-                        for idx, col in enumerate(cols):
-
-                            if "total amount charged" in col:
-                                amount_col_index = idx
-                                break
-
-                        if amount_col_index is not None:
-                            break
-
                     # =============================================
                     # ROW PROCESSING
                     # =============================================
@@ -284,30 +260,23 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                         break
 
                                 # =================================
-                                # AMOUNT FROM TOTAL AMOUNT CHARGED
+                                # AMOUNT
                                 # =================================
 
-                                f_amt = 0.0
+                                last_col_val = (
+                                    tds[-1]
+                                    .replace("Rs.", "")
+                                    .replace("Rs", "")
+                                    .replace(",", "")
+                                    .strip()
+                                )
 
-                                try:
+                                if last_col_val.replace('.', '', 1).isdigit():
+                                    f_amt = float(last_col_val)
+                                else:
+                                    f_amt = 0.0
 
-                                    if (
-                                        amount_col_index is not None
-                                        and amount_col_index < len(tds)
-                                    ):
-
-                                        amt_text = (
-                                            tds[amount_col_index]
-                                            .replace("Rs.", "")
-                                            .replace("Rs", "")
-                                            .replace(",", "")
-                                            .strip()
-                                        )
-
-                                        if amt_text.replace(".", "", 1).isdigit():
-                                            f_amt = float(amt_text)
-
-                                except:
+                                if f_amt > 1000000:
                                     f_amt = 0.0
 
                                 # =================================
@@ -371,19 +340,11 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
 
                         existing_data = worksheet.get_all_values()
 
-                        existing_dates = []
-
-                        for r in existing_data:
-
-                            if len(r) > 0:
-
-                                saved_date = (
-                                    str(r[0])
-                                    .replace("-", "/")
-                                    .strip()
-                                )
-
-                                existing_dates.append(saved_date)
+                        existing_dates = [
+                            r[0]
+                            for r in existing_data
+                            if len(r) > 0
+                        ]
 
                         unique_dates_in_file = sorted(
                             list(set(df["date"].tolist())),
@@ -422,17 +383,19 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
 
                             total = len(day_df)
 
-                            amount = int(day_df["amt"].sum())
+                            amount = int(
+                                day_df["amt"].sum()
+                            )
 
                             worksheet.append_row([
-                                d.replace("/", "-"),
+                                d,
                                 station_id,
                                 op_name,
                                 operator_id,
-                                int(enrol),
-                                int(update),
-                                int(total),
-                                int(amount)
+                                enrol,
+                                update,
+                                total,
+                                amount
                             ])
 
                             newly_added.append(d)
@@ -453,7 +416,7 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                 body_sorted = sorted(
                                     body,
                                     key=lambda x: datetime.strptime(
-                                        x[0].replace("-", "/"),
+                                        x[0],
                                         "%d/%m/%Y"
                                     )
                                 )
@@ -468,7 +431,7 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                 pass
 
                         # =========================================
-                        # ALL DUPLICATE
+                        # ALL DATA DUPLICATE
                         # =========================================
 
                         if len(newly_added) == 0 and len(duplicate_dates) > 0:
@@ -511,7 +474,7 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                             """, unsafe_allow_html=True)
 
                         # =========================================
-                        # MIXED / NEW DATA
+                        # NEW / MIXED DATA
                         # =========================================
 
                         elif newly_added or duplicate_dates:
@@ -528,7 +491,10 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                             </div>
                             """, unsafe_allow_html=True)
 
-                            # DUPLICATE INFO
+                            # =====================================
+                            # DUPLICATE DATES
+                            # =====================================
+
                             if duplicate_dates:
 
                                 duplicate_dates_sorted = sorted(
@@ -546,7 +512,10 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                     f"{duplicate_dates_sorted[-1]}"
                                 )
 
-                            # NEW DATA INFO
+                            # =====================================
+                            # NEWLY SAVED
+                            # =====================================
+
                             if newly_added:
 
                                 newly_added_sorted = sorted(
@@ -564,6 +533,10 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                     f"{newly_added_sorted[-1]}"
                                 )
 
+                                # =================================
+                                # SHOW ONLY NEW DATA TABLE
+                                # =================================
+
                                 filtered_table = df[
                                     df["date"].isin(newly_added)
                                 ]
@@ -579,7 +552,8 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                             "type",
                                             lambda x: (x == "U").sum()
                                         ),
-                                        Total=("type", "count")
+                                        Total=("type", "count"),
+                                        Amount=("amt", "sum")
                                     )
                                     .reset_index()
                                 )
@@ -590,6 +564,36 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                     show_table,
                                     use_container_width=True
                                 )
+
+                                # =============================
+                                # PERFORMANCE
+                                # =============================
+
+                                avg_val = round(
+                                    len(filtered_table) / len(newly_added),
+                                    2
+                                )
+
+                                st.write(
+                                    f"### 📊 Report Stats: {avg_val} Avg"
+                                )
+
+                                if avg_val < 15:
+
+                                    st.toast(
+                                        f"🚨 Low Average Alert: {avg_val}",
+                                        icon="⚠️"
+                                    )
+
+                                    st.markdown(f"""
+                                    <div class='warning-box'>
+                                    ⚠️ Warning:
+                                    Aapka average {avg_val} kam hai!
+                                    </div>
+                                    """, unsafe_allow_html=True)
+
+                                else:
+                                    st.balloons()
 
                     else:
 
