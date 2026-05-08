@@ -21,14 +21,21 @@ OPERATOR_MAP = {
     "GJPE_SBK_NS101344": "PARMAR RAVINDRA"
 }
 
+# --- STYLING ---
 st.markdown("""
     <style>
     .main-box { padding: 20px; border-radius: 12px; background-color: #d32f2f; color: white; text-align: center; margin-bottom: 20px; }
-    .success-card { padding: 20px; border-radius: 10px; background-color: #f0fdf4; border: 1px solid #16a34a; margin-top: 15px; color: #166534; font-size: 16px; }
+    .success-card { padding: 20px; border-radius: 10px; background-color: #f0fdf4; border: 1px solid #16a34a; margin-top: 15px; color: #166534; }
     .warning-box { padding: 15px; background-color: #fef2f2; border: 1px solid #dc2626; color: #991b1b; border-radius: 10px; margin-top: 10px; font-weight: bold; }
     </style>
     <div class="main-box"><b style="font-size: 22px;">🏦 STATION EOD AUTOMATION SYSTEM</b></div>
     """, unsafe_allow_html=True)
+
+# --- UI DROPDOWNS (Professional Purpose Only) ---
+col1, col2, col3 = st.columns(3)
+with col1: st.selectbox("Date Range", ["01 to 08", "09 to 16", "17 to 24", "25 to 31"])
+with col2: st.selectbox("Month", ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"], index=datetime.now().month - 1)
+with col3: st.selectbox("Year", [2024, 2025, 2026], index=1)
 
 zip_password = st.text_input("Enter ZIP Password", type="password")
 uploaded_files = st.file_uploader("Upload ZIP Reports", type="zip", accept_multiple_files=True)
@@ -49,7 +56,7 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                 os.makedirs(extract_dir, exist_ok=True)
                 with pyzipper.AESZipFile(uploaded_file) as zf:
                     try: zf.extractall(extract_dir, pwd=zip_password.encode())
-                    except: st.error(f"🚨 Password Galat Hai!"); continue
+                    except: st.error("🚨 Password Galat Hai!"); continue
 
                 station_id, operator_id = None, None
                 all_entries = []
@@ -59,7 +66,7 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                     if file.endswith(".html"):
                         path = os.path.join(extract_dir, file)
                         
-                        # Summary Table nikalna UI ke liye
+                        # UI Table nikalna
                         tabs = pd.read_html(path)
                         for t in tabs:
                             t.columns = [str(c).lower() for c in t.columns]
@@ -74,7 +81,6 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                 if len(tds) < 2: continue
                                 if "Station ID" in tds[0]: station_id = tds[1]
                                 if "Operator" in tds[0]: operator_id = tds[1]
-                                
                                 if len(tds) > 10 and "/" in tds[1]:
                                     date_match = re.search(r'(\d{4})/(\d{2})/(\d{2})', tds[1])
                                     if date_match:
@@ -99,18 +105,15 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
 
                     for d in unique_dates:
                         if d in flat_existing: continue
-                        
                         day_df = df[df['date'] == d]
                         enrol = len(day_df[day_df['type'] == 'E'])
                         update = len(day_df[day_df['type'] == 'U'])
                         total = len(day_df)
                         amount = int(day_df['amt'].sum())
-                        
                         worksheet.append_row([d, station_id, op_name, operator_id, enrol, update, total, amount])
                         newly_added.append(d)
 
                     if newly_added:
-                        # --- SUCCESS CARD WITH DETAILS ---
                         st.markdown(f"""
                         <div class="success-card">
                             <b style="font-size:18px;">✅ DATA SAVED SUCCESSFULLY!</b><br><br>
@@ -123,16 +126,15 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                         st.write("### 📊 Summary of Uploaded Report")
                         st.table(summary_table_ui)
                         
-                        # Average Logic & Alert
                         avg_val = round(len(df) / len(unique_dates), 2)
                         if avg_val < 15:
                             st.toast(f"🚨 Low Average Alert: {avg_val}", icon="⚠️")
-                            st.markdown(f"<div class='warning-box'>⚠️ Low Average Warning: Aapka average {avg_val} hai. Minimum 15 hona chahiye!</div>", unsafe_allow_html=True)
+                            st.markdown(f"<div class='warning-box'>⚠️ Warning: Average {avg_val} hai. 15 se kam hai!</div>", unsafe_allow_html=True)
                         else:
                             st.balloons()
-                            st.success(f"🔥 Great Performance! Average: {avg_val}")
+                            st.success(f"🔥 Performance: {avg_val} Avg")
                     else:
-                        st.info("ℹ️ File ki sabhi dates pehle se sheet mein maujood hain.")
+                        st.info("ℹ️ Sari dates pehle se sheet mein hain.")
 
                 shutil.rmtree(extract_dir)
         except Exception as e:
