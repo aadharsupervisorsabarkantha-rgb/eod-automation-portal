@@ -387,16 +387,15 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                 day_df["amt"].sum()
                             )
 
-                            worksheet.append_row([
-                                d,
-                                station_id,
-                                op_name,
-                                operator_id,
-                                enrol,
-                                update,
-                                total,
-                                amount
-                            ])
+                           worksheet.append_row([
+    datetime.strptime(d, "%d/%m/%Y").strftime("%d-%m-%Y"),
+    station_id,
+    op_name,
+    operator_id,
+    int(enrol),
+    int(update),
+    int(total),
+    int(amount)
 
                             newly_added.append(d)
 
@@ -552,8 +551,7 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                             "type",
                                             lambda x: (x == "U").sum()
                                         ),
-                                        Total=("type", "count"),
-                                        Amount=("amt", "sum")
+                                        Total=("type", "count")
                                     )
                                     .reset_index()
                                 )
