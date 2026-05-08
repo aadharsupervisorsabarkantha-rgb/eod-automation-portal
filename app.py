@@ -552,8 +552,7 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                             "type",
                                             lambda x: (x == "U").sum()
                                         ),
-                                        Total=("type", "count"),
-                                        Amount=("amt", "sum")
+                                        Total=("type", "count")
                                     )
                                     .reset_index()
                                 )
