@@ -392,11 +392,11 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                 station_id,
                                 op_name,
                                 operator_id,
-                                enrol,
-                                update,
-                                total,
-                                amount
-                            ])
+                                int(enrol),
+                                int(update),
+                                int(total),
+                                int(amount)
+])
 
                             newly_added.append(d)
 
