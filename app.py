@@ -187,6 +187,17 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                     station_id = None
                     operator_id = None
                     all_entries = []
+                    uidai_summary_table = None
+
+                    # --- EXTRACTION FOR UIDAI SUMMARY TABLE ---
+                    try:
+                        tabs = pd.read_html(io.StringIO(content))
+                        for t in tabs:
+                            t.columns = [str(c).strip().lower() for c in t.columns]
+                            if "date" in t.columns and "no. of enrolments" in t.columns:
+                                uidai_summary_table = t[t['date'].str.contains(r'\d{2}/\d{2}/\d{4}', na=False)]
+                    except:
+                        pass
 
                     # =============================================
                     # ROW PROCESSING
@@ -260,31 +271,22 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                         break
 
                                 # =================================
-                                # AMOUNT
+                                # AMOUNT (SECURITY ADDED)
                                 # =================================
 
-                                amount_found = 0.0
+                                last_col_val = (
+                                    tds[-1]
+                                    .replace("Rs.", "")
+                                    .replace("Rs", "")
+                                    .replace(",", "")
+                                    .strip()
+                                )
 
-                                for val in reversed(tds):
-
-                                    clean_val = (
-                                        val.replace("Rs.", "")
-                                        .replace("Rs", "")
-                                        .replace(",", "")
-                                        .strip()
-                                    )
-
-                                    if clean_val.replace('.', '', 1).isdigit():
-
-                                        num = float(clean_val)
-
-                                        # Valid charge amount only
-                                        if 1 <= num <= 10000:
-
-                                            amount_found = num
-                                            break
-
-                                f_amt = amount_found
+                                # Pick only if it's a digit and not a long EID (less than 6 digits)
+                                if last_col_val.replace('.', '', 1).isdigit() and len(last_col_val) < 6:
+                                    f_amt = float(last_col_val)
+                                else:
+                                    f_amt = 0.0
 
                                 # =================================
                                 # SAVE ENTRY
@@ -395,18 +397,15 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                             )
 
                             worksheet.append_row([
-                                datetime.strptime(
-                                    d,
-                                    "%d/%m/%Y"
-                                ).strftime("%d-%m-%Y"),
-                                station_id,
-                                op_name,
-                                operator_id,
-                                int(enrol),
-                                int(update),
-                                int(total),
-                                int(amount)
-                            ])
+    datetime.strptime(d, "%d/%m/%Y").strftime("%d-%m-%Y"),
+    station_id,
+    op_name,
+    operator_id,
+    int(enrol),
+    int(update),
+    int(total),
+    int(amount)
+])
 
                             newly_added.append(d)
 
@@ -427,7 +426,7 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                     body,
                                     key=lambda x: datetime.strptime(
                                         x[0],
-                                        "%d-%m-%Y"
+                                        "%d/%m/%Y"
                                     )
                                 )
 
@@ -543,6 +542,10 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                     f"{newly_added_sorted[-1]}"
                                 )
 
+                                # --- DISPLAY UIDAI SUMMARY TABLE (NEWLY SAVED) ---
+                                st.write("### 📅 UIDAI Summary Table")
+                                st.table(uidai_summary_table)
+
                                 # =================================
                                 # SHOW ONLY NEW DATA TABLE
                                 # =================================
@@ -567,7 +570,7 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                     .reset_index()
                                 )
 
-                                st.write("### ✅ Newly Saved Data")
+                                st.write("### ✅ Processed Details")
 
                                 st.dataframe(
                                     show_table,
