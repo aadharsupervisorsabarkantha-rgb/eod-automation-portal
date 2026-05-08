@@ -260,25 +260,30 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                         break
 
                                 # =================================
-                                # AMOUNT
-                                # =================================
+# AMOUNT
+# =================================
 
-                                last_col_val = (
-                                    tds[-1]
-                                    .replace("Rs.", "")
-                                    .replace("Rs", "")
-                                    .replace(",", "")
-                                    .strip()
-                                )
+amount_found = 0.0
 
-                                if last_col_val.replace('.', '', 1).isdigit():
-                                    f_amt = float(last_col_val)
-                                else:
-                                    f_amt = 0.0
+for val in reversed(tds):
 
-                                if f_amt > 1000000:
-                                    f_amt = 0.0
+    clean_val = (
+        val.replace("Rs.", "")
+        .replace("Rs", "")
+        .replace(",", "")
+        .strip()
+    )
 
+    if clean_val.replace('.', '', 1).isdigit():
+
+        num = float(clean_val)
+
+        # Valid charge amount only
+        if 1 <= num <= 10000:
+            amount_found = num
+            break
+
+f_amt = amount_found
                                 # =================================
                                 # SAVE ENTRY
                                 # =================================
