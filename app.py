@@ -11,19 +11,27 @@ st.set_page_config(page_title="EOD Professional Portal", layout="wide")
 
 # --- OPERATOR DATABASE ---
 OPERATOR_MAP = {
-    "GJPE_SBK_NS603205": "RATHOD VIJAY", "GJPE_SBK_NS435053": "PATEL VIPUL",
-    "GJPE_SBK_NS668733": "CHAUHAN CHANDUJI", "GJPE_SBK_NS716164": "DAYANI MADHUBEN",
-    "GJPE_SBR_NS851220": "MEMON SAKIL", "GJPE_SBK_NS101318": "BHATT SANAM",
-    "GJPE_SBK_NS054082": "SOLANKI RAJESH", "GJPE_SBK_NS463140": "JADAV SHASHIKANT",
-    "GJPE_SBK_NS728611": "RAVAL JAYPAL", "GJPE_SBK_NS721374": "ASARI ROHIT",
-    "GJPE_SBK_NS776405": "BAROT APURVA", "GJPE_SBK_NS829265": "VANKAR TEJALBEN",
-    "GJPE_SBK_NS442326": "MANSURI VARISH", "GJPE_SBR_NS737401": "DABHI BIBIBEN",
+    "GJPE_SBK_NS603205": "RATHOD VIJAY",
+    "GJPE_SBK_NS435053": "PATEL VIPUL",
+    "GJPE_SBK_NS668733": "CHAUHAN CHANDUJI",
+    "GJPE_SBK_NS716164": "DAYANI MADHUBEN",
+    "GJPE_SBR_NS851220": "MEMON SAKIL",
+    "GJPE_SBK_NS101318": "BHATT SANAM",
+    "GJPE_SBK_NS054082": "SOLANKI RAJESH",
+    "GJPE_SBK_NS463140": "JADAV SHASHIKANT",
+    "GJPE_SBK_NS728611": "RAVAL JAYPAL",
+    "GJPE_SBK_NS721374": "ASARI ROHIT",
+    "GJPE_SBK_NS776405": "BAROT APURVA",
+    "GJPE_SBK_NS829265": "VANKAR TEJALBEN",
+    "GJPE_SBK_NS442326": "MANSURI VARISH",
+    "GJPE_SBR_NS737401": "DABHI BIBIBEN",
     "GJPE_SBK_NS101344": "PARMAR RAVINDRA"
 }
 
 # --- CSS ---
 st.markdown("""
 <style>
+
 .main-box{
     padding:20px;
     border-radius:15px;
@@ -32,6 +40,7 @@ st.markdown("""
     text-align:center;
     margin-bottom:20px;
 }
+
 .success-card{
     padding:20px;
     border-radius:12px;
@@ -40,6 +49,7 @@ st.markdown("""
     color:#166534;
     margin-top:15px;
 }
+
 .warning-box{
     padding:15px;
     border-radius:10px;
@@ -49,6 +59,7 @@ st.markdown("""
     margin-top:10px;
     font-weight:bold;
 }
+
 </style>
 
 <div class="main-box">
@@ -94,7 +105,10 @@ uploaded_files = st.file_uploader(
     accept_multiple_files=True
 )
 
-# ---------------- PROCESS ----------------
+# =========================================================
+# MAIN PROCESS
+# =========================================================
+
 if st.button("🚀 FINAL SUBMIT & PROCESS"):
 
     if not uploaded_files or not zip_password:
@@ -122,7 +136,10 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
             "19mlf7dpNJyyvnKYZpoJtjyQY6RkTaze4FsC7xCKnMrU"
         )
 
-        # --- FILE LOOP ---
+        # =====================================================
+        # FILE LOOP
+        # =====================================================
+
         for uploaded_file in uploaded_files:
 
             with pyzipper.AESZipFile(uploaded_file) as zf:
@@ -150,7 +167,10 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                     all_entries = []
                     summary_table_ui = None
 
-                    # --- SUMMARY TABLE ---
+                    # =====================================================
+                    # SUMMARY TABLE
+                    # =====================================================
+
                     try:
 
                         tabs = pd.read_html(
@@ -192,7 +212,6 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                             for td in row.find_all("td")
                         ]
 
-                        # Minimum 2 columns required
                         if len(tds) < 2:
                             continue
 
@@ -224,7 +243,6 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
 
                             try:
 
-                                # Hidden date before last 6 digits
                                 hidden_date = eid_val[-14:-6]
 
                                 h_date = datetime.strptime(
@@ -257,7 +275,6 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                 else:
                                     f_amt = 0.0
 
-                                # Safety
                                 if f_amt > 1000000:
                                     f_amt = 0.0
 
@@ -272,18 +289,22 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                 continue
 
                     # =====================================================
+                    # PROCESS DATA
+                    # =====================================================
 
                     op_name = OPERATOR_MAP.get(
                         operator_id,
                         "Unknown"
                     )
 
-                    # --- MAIN DATAFRAME ---
                     if station_id and all_entries:
 
                         df = pd.DataFrame(all_entries)
 
-                        # --- WORKSHEET ---
+                        # =================================================
+                        # WORKSHEET
+                        # =================================================
+
                         try:
 
                             worksheet = spreadsheet.worksheet(
@@ -309,7 +330,10 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                 "Amount"
                             ])
 
-                        # --- EXISTING DATES ---
+                        # =================================================
+                        # EXISTING DATA
+                        # =================================================
+
                         existing_data = worksheet.get_all_values()
 
                         existing_dates = [
@@ -318,7 +342,6 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                             if len(r) > 0
                         ]
 
-                        # --- UNIQUE DATES ---
                         unique_dates_in_file = sorted(
                             list(set(df["date"].tolist())),
                             key=lambda x: datetime.strptime(
@@ -328,11 +351,16 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                         )
 
                         newly_added = []
+                        duplicate_dates = []
 
-                        # --- DATE LOOP ---
+                        # =================================================
+                        # DATE LOOP
+                        # =================================================
+
                         for d in unique_dates_in_file:
 
                             if d in existing_dates:
+                                duplicate_dates.append(d)
                                 continue
 
                             day_df = df[df["date"] == d]
@@ -368,25 +396,97 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
 
                             newly_added.append(d)
 
-                        # --- SUCCESS UI ---
-                        if newly_added:
+                        # =================================================
+                        # SORT SHEET DATE WISE
+                        # =================================================
 
-                            st.markdown(f"""
+                        all_sheet_data = worksheet.get_all_values()
+
+                        if len(all_sheet_data) > 1:
+
+                            header = all_sheet_data[0]
+                            body = all_sheet_data[1:]
+
+                            try:
+
+                                body_sorted = sorted(
+                                    body,
+                                    key=lambda x: datetime.strptime(
+                                        x[0],
+                                        "%d/%m/%Y"
+                                    )
+                                )
+
+                                worksheet.clear()
+
+                                worksheet.append_row(header)
+
+                                worksheet.append_rows(body_sorted)
+
+                            except:
+                                pass
+
+                        # =================================================
+                        # SUCCESS UI
+                        # =================================================
+
+                        if newly_added or duplicate_dates:
+
+                            msg_html = f"""
                             <div class="success-card">
-                            <h3>
-                            ✅ SAVED: {len(newly_added)} New Dates
-                            </h3>
 
-                            👤 {op_name}
-                            |
-                            📍 {station_id}
+                            <h3>✅ DATA PROCESS COMPLETED</h3>
 
-                            <br>
+                            👤 <b>Operator:</b> {op_name}<br>
+                            📍 <b>Station:</b> {station_id}<br><br>
+                            """
 
-                            📅 {newly_added[0]} to {newly_added[-1]}
+                            # Duplicate Dates
+                            if duplicate_dates:
 
-                            </div>
-                            """, unsafe_allow_html=True)
+                                duplicate_dates_sorted = sorted(
+                                    duplicate_dates,
+                                    key=lambda x: datetime.strptime(
+                                        x,
+                                        "%d/%m/%Y"
+                                    )
+                                )
+
+                                msg_html += f"""
+                                ⚠️ <b>Already Saved:</b><br>
+                                {duplicate_dates_sorted[0]}
+                                to
+                                {duplicate_dates_sorted[-1]}<br><br>
+                                """
+
+                            # Newly Saved Dates
+                            if newly_added:
+
+                                newly_added_sorted = sorted(
+                                    newly_added,
+                                    key=lambda x: datetime.strptime(
+                                        x,
+                                        "%d/%m/%Y"
+                                    )
+                                )
+
+                                msg_html += f"""
+                                ✅ <b>Newly Saved:</b><br>
+                                {newly_added_sorted[0]}
+                                to
+                                {newly_added_sorted[-1]}
+                                """
+
+                            msg_html += "</div>"
+
+                            st.markdown(
+                                msg_html,
+                                unsafe_allow_html=True
+                            )
+
+                            # =================================================
+                            # PERFORMANCE
+                            # =================================================
 
                             avg_val = round(
                                 len(df) / len(unique_dates_in_file),
@@ -400,32 +500,6 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                             if summary_table_ui is not None:
                                 st.table(summary_table_ui)
 
-                            # --- DATE WISE SUMMARY ---
-                            st.write("## 📅 Date Wise Summary")
-
-                            daily_summary = (
-                                df.groupby("date")
-                                .agg(
-                                    Enrol=(
-                                        "type",
-                                        lambda x: (x == "E").sum()
-                                    ),
-                                    Update=(
-                                        "type",
-                                        lambda x: (x == "U").sum()
-                                    ),
-                                    Total=("type", "count"),
-                                    Amount=("amt", "sum")
-                                )
-                                .reset_index()
-                            )
-
-                            st.dataframe(
-                                daily_summary,
-                                use_container_width=True
-                            )
-
-                            # --- PERFORMANCE ---
                             if avg_val < 15:
 
                                 st.toast(
@@ -447,7 +521,7 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
 
                             st.warning(
                                 f"ℹ️ {station_id}: "
-                                f"Data pehle se sheet mein hai."
+                                f"Data already saved hai."
                             )
 
                     else:
