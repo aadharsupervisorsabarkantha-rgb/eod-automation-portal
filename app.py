@@ -1,4 +1,3 @@
-```python id="jlwmv8"
 import streamlit as st
 import pyzipper
 import io
