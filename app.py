@@ -387,7 +387,7 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                 day_df["amt"].sum()
                             )
 
-                            worksheet.append_row([
+                           worksheet.append_row([
     datetime.strptime(d, "%d/%m/%Y").strftime("%d-%m-%Y"),
     station_id,
     op_name,
@@ -542,21 +542,20 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                 ]
 
                                 show_table = (
-    filtered_table.groupby("date")
-    .agg(
-        Enrol=(
-            "type",
-            lambda x: (x == "E").sum()
-        ),
-        Update=(
-            "type",
-            lambda x: (x == "U").sum()
-        ),
-        Total=("type", "count"),
-        Amount=("amt", "sum")
-    )
-    .reset_index()
-)
+                                    filtered_table.groupby("date")
+                                    .agg(
+                                        Enrol=(
+                                            "type",
+                                            lambda x: (x == "E").sum()
+                                        ),
+                                        Update=(
+                                            "type",
+                                            lambda x: (x == "U").sum()
+                                        ),
+                                        Total=("type", "count"),
+                                        Amount=("amt", "sum")
+                                    )
+                                    .reset_index()
                                 )
 
                                 st.write("### ✅ Newly Saved Data")
