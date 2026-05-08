@@ -361,7 +361,7 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                         # SAVE DATA
                         # =========================================
 
-                            for d in unique_dates_in_file:
+                        for d in unique_dates_in_file:
                             if d in existing_dates:
                                 duplicate_dates.append(d)
                                 continue
@@ -370,11 +370,13 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                             enrol = len(day_df[day_df["type"] == "E"])
                             update = len(day_df[day_df["type"] == "U"])
                             total = len(day_df)
-                            amount = int(day_df["amt"].sum())
+                            
+                            # Amount logic with security (EID check)
+                            raw_amt = day_df["amt"].sum()
+                            amount = int(raw_amt) if raw_amt < 10000 else 0
 
-                            # Ye rahi wo line (390) jise maine sahi indent kar diya hai
                             worksheet.append_row([
-                                datetime.strptime(d, "%d/%m/%Y").strftime("%d-%m-%Y"),
+                                d.replace('/', '-'), # Save as 15-12-2024
                                 station_id,
                                 op_name,
                                 operator_id,
