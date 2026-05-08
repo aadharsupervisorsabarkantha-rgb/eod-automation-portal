@@ -361,7 +361,7 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                         # SAVE DATA
                         # =========================================
 
-                  for d in unique_dates_in_file:
+                            for d in unique_dates_in_file:
                             if d in existing_dates:
                                 duplicate_dates.append(d)
                                 continue
