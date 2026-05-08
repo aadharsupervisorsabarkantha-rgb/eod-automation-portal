@@ -408,10 +408,53 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                 pass
 
                         # =============================================
-                        # SUCCESS CARD
+                        # ALL DATES ALREADY SAVED
                         # =============================================
 
-                        if newly_added or duplicate_dates:
+                        if len(newly_added) == 0 and len(duplicate_dates) > 0:
+
+                            duplicate_dates_sorted = sorted(
+                                duplicate_dates,
+                                key=lambda x: datetime.strptime(
+                                    x,
+                                    "%d/%m/%Y"
+                                )
+                            )
+
+                            st.markdown(f"""
+                            <div style="
+                                background:#fef2f2;
+                                border:2px solid #dc2626;
+                                color:#991b1b;
+                                padding:20px;
+                                border-radius:12px;
+                                margin-top:15px;
+                                font-size:16px;
+                                line-height:1.8;
+                            ">
+
+                            <h3>⚠️ DATA ALREADY SAVED</h3>
+
+                            👤 <b>Operator:</b> {op_name}<br>
+                            🆔 <b>Operator ID:</b> {operator_id}<br>
+                            📍 <b>Station:</b> {station_id}<br><br>
+
+                            ⚠️ Aapne pehle hi
+                            <b>
+                            {duplicate_dates_sorted[0]}
+                            to
+                            {duplicate_dates_sorted[-1]}
+                            </b>
+                            tak ka data save kar liya hai.
+
+                            </div>
+                            """, unsafe_allow_html=True)
+
+                        # =============================================
+                        # NEW / MIXED DATA
+                        # =============================================
+
+                        elif newly_added or duplicate_dates:
 
                             msg_html = f"""
                             <div class="success-card">
@@ -419,6 +462,7 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                             <h3>✅ DATA PROCESS COMPLETED</h3>
 
                             👤 <b>Operator:</b> {op_name}<br>
+                            🆔 <b>Operator ID:</b> {operator_id}<br>
                             📍 <b>Station:</b> {station_id}<br><br>
                             """
 
@@ -488,7 +532,7 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                             )
 
                             # =========================================
-                            # SHOW ONLY NEWLY SAVED TABLE
+                            # SHOW ONLY NEW DATA TABLE
                             # =========================================
 
                             if newly_added:
@@ -521,42 +565,35 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                     use_container_width=True
                                 )
 
-                            # =========================================
-                            # PERFORMANCE
-                            # =========================================
+                                # =====================================
+                                # PERFORMANCE ONLY FOR NEW DATA
+                                # =====================================
 
-                            avg_val = round(
-                                len(df) / len(unique_dates_in_file),
-                                2
-                            )
-
-                            st.write(
-                                f"### 📊 Report Stats: {avg_val} Avg"
-                            )
-
-                            if avg_val < 15:
-
-                                st.toast(
-                                    f"🚨 Low Average Alert: {avg_val}",
-                                    icon="⚠️"
+                                avg_val = round(
+                                    len(filtered_table) / len(newly_added),
+                                    2
                                 )
 
-                                st.markdown(f"""
-                                <div class='warning-box'>
-                                ⚠️ Warning:
-                                Aapka average {avg_val} kam hai!
-                                </div>
-                                """, unsafe_allow_html=True)
+                                st.write(
+                                    f"### 📊 Report Stats: {avg_val} Avg"
+                                )
 
-                            else:
-                                st.balloons()
+                                if avg_val < 15:
 
-                        else:
+                                    st.toast(
+                                        f"🚨 Low Average Alert: {avg_val}",
+                                        icon="⚠️"
+                                    )
 
-                            st.warning(
-                                f"ℹ️ {station_id}: "
-                                f"Data already saved hai."
-                            )
+                                    st.markdown(f"""
+                                    <div class='warning-box'>
+                                    ⚠️ Warning:
+                                    Aapka average {avg_val} kam hai!
+                                    </div>
+                                    """, unsafe_allow_html=True)
+
+                                else:
+                                    st.balloons()
 
                     else:
 
