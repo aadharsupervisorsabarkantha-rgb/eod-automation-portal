@@ -1,13 +1,21 @@
 import streamlit as st
 import pyzipper
-import io, re
+import io
+import re
 import pandas as pd
 from bs4 import BeautifulSoup
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
 
-st.set_page_config(page_title="EOD Professional Portal", layout="wide")
+# =====================================================
+# PAGE CONFIG
+# =====================================================
+
+st.set_page_config(
+    page_title="EOD Professional Portal",
+    layout="wide"
+)
 
 # =====================================================
 # OPERATOR DATABASE
@@ -117,7 +125,7 @@ uploaded_files = st.file_uploader(
 )
 
 # =====================================================
-# MAIN PROCESS
+# MAIN BUTTON
 # =====================================================
 
 if st.button("🚀 FINAL SUBMIT & PROCESS"):
@@ -180,9 +188,9 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                     operator_id = None
                     all_entries = []
 
-                    # =================================================
-                    # TABLE ROW PROCESSING
-                    # =================================================
+                    # =============================================
+                    # ROW PROCESSING
+                    # =============================================
 
                     rows = soup.find_all("tr")
 
@@ -204,11 +212,14 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                         if "Operator" in tds[0]:
                             operator_id = tds[1].strip()
 
-                        # Transaction rows only
+                        # Skip short rows
                         if len(tds) < 10:
                             continue
 
-                        # Find EID
+                        # =========================================
+                        # FIND EID
+                        # =========================================
+
                         eid_val = None
 
                         for x in tds:
@@ -219,7 +230,10 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                 eid_val = digits
                                 break
 
-                        # Extract Date
+                        # =========================================
+                        # EXTRACT DATE
+                        # =========================================
+
                         if eid_val:
 
                             try:
@@ -231,7 +245,10 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                     "%Y%m%d"
                                 ).strftime("%d/%m/%Y")
 
-                                # Type
+                                # =================================
+                                # TYPE
+                                # =================================
+
                                 txn_type = "E"
 
                                 for x in tds:
@@ -242,7 +259,10 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                         txn_type = val
                                         break
 
-                                # Amount
+                                # =================================
+                                # AMOUNT
+                                # =================================
+
                                 last_col_val = (
                                     tds[-1]
                                     .replace("Rs.", "")
@@ -259,7 +279,10 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                 if f_amt > 1000000:
                                     f_amt = 0.0
 
-                                # Save Entry
+                                # =================================
+                                # SAVE ENTRY
+                                # =================================
+
                                 all_entries.append({
                                     "date": h_date,
                                     "type": txn_type,
@@ -269,9 +292,9 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                             except:
                                 continue
 
-                    # =================================================
-                    # PROCESS DATA
-                    # =================================================
+                    # =============================================
+                    # VALIDATION
+                    # =============================================
 
                     op_name = OPERATOR_MAP.get(
                         operator_id,
@@ -282,9 +305,9 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
 
                         df = pd.DataFrame(all_entries)
 
-                        # =============================================
+                        # =========================================
                         # WORKSHEET
-                        # =============================================
+                        # =========================================
 
                         try:
 
@@ -311,9 +334,9 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                 "Amount"
                             ])
 
-                        # =============================================
+                        # =========================================
                         # EXISTING DATES
-                        # =============================================
+                        # =========================================
 
                         existing_data = worksheet.get_all_values()
 
@@ -334,9 +357,9 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                         newly_added = []
                         duplicate_dates = []
 
-                        # =============================================
+                        # =========================================
                         # SAVE DATA
-                        # =============================================
+                        # =========================================
 
                         for d in unique_dates_in_file:
 
@@ -377,9 +400,9 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
 
                             newly_added.append(d)
 
-                        # =============================================
+                        # =========================================
                         # SORT SHEET
-                        # =============================================
+                        # =========================================
 
                         all_sheet_data = worksheet.get_all_values()
 
@@ -407,9 +430,9 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                             except:
                                 pass
 
-                        # =============================================
-                        # ALL DATES ALREADY SAVED
-                        # =============================================
+                        # =========================================
+                        # ALL DATA DUPLICATE
+                        # =========================================
 
                         if len(newly_added) == 0 and len(duplicate_dates) > 0:
 
@@ -439,96 +462,80 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                             🆔 <b>Operator ID:</b> {operator_id}<br>
                             📍 <b>Station:</b> {station_id}<br><br>
 
-                            ⚠️ Aapne pehle hi
+                            ⚠️ Aap pehle hi
                             <b>
                             {duplicate_dates_sorted[0]}
                             to
                             {duplicate_dates_sorted[-1]}
                             </b>
-                            tak ka data save kar liya hai.
+                            tak ka data save kar chuke ho.
 
                             </div>
                             """, unsafe_allow_html=True)
 
-                       # =============================================
-# NEW / MIXED DATA
-# =============================================
+                        # =========================================
+                        # NEW / MIXED DATA
+                        # =========================================
 
-elif newly_added or duplicate_dates:
+                        elif newly_added or duplicate_dates:
 
-    # =========================================
-    # SUCCESS CARD
-    # =========================================
+                            st.markdown(f"""
+                            <div class="success-card">
 
-    with st.container():
+                            <h3>✅ DATA PROCESS COMPLETED</h3>
 
-        st.markdown(f"""
-        <div class="success-card">
-        <h3>✅ DATA PROCESS COMPLETED</h3>
+                            👤 <b>Operator:</b> {op_name}<br>
+                            🆔 <b>Operator ID:</b> {operator_id}<br>
+                            📍 <b>Station:</b> {station_id}
 
-        👤 <b>Operator:</b> {op_name}<br>
-        🆔 <b>Operator ID:</b> {operator_id}<br>
-        📍 <b>Station:</b> {station_id}
-        </div>
-        """, unsafe_allow_html=True)
+                            </div>
+                            """, unsafe_allow_html=True)
 
-        # Duplicate Dates
-        if duplicate_dates:
+                            # =====================================
+                            # DUPLICATE DATES
+                            # =====================================
 
-            duplicate_dates_sorted = sorted(
-                duplicate_dates,
-                key=lambda x: datetime.strptime(
-                    x,
-                    "%d/%m/%Y"
-                )
-            )
+                            if duplicate_dates:
 
-            if len(duplicate_dates_sorted) == 1:
+                                duplicate_dates_sorted = sorted(
+                                    duplicate_dates,
+                                    key=lambda x: datetime.strptime(
+                                        x,
+                                        "%d/%m/%Y"
+                                    )
+                                )
 
-                st.error(
-                    f"Already Saved: {duplicate_dates_sorted[0]}"
-                )
+                                st.error(
+                                    f"Already Saved: "
+                                    f"{duplicate_dates_sorted[0]} "
+                                    f"to "
+                                    f"{duplicate_dates_sorted[-1]}"
+                                )
 
-            else:
-
-                st.error(
-                    f"Already Saved: "
-                    f"{duplicate_dates_sorted[0]} "
-                    f"to "
-                    f"{duplicate_dates_sorted[-1]}"
-                )
-
-        # Newly Saved Dates
-        if newly_added:
-
-            newly_added_sorted = sorted(
-                newly_added,
-                key=lambda x: datetime.strptime(
-                    x,
-                    "%d/%m/%Y"
-                )
-            )
-
-            if len(newly_added_sorted) == 1:
-
-                st.success(
-                    f"Newly Saved: {newly_added_sorted[0]}"
-                )
-
-            else:
-
-                st.success(
-                    f"Newly Saved: "
-                    f"{newly_added_sorted[0]} "
-                    f"to "
-                    f"{newly_added_sorted[-1]}"
-                )
-
-                            # =========================================
-                            # SHOW ONLY NEW DATA TABLE
-                            # =========================================
+                            # =====================================
+                            # NEWLY SAVED
+                            # =====================================
 
                             if newly_added:
+
+                                newly_added_sorted = sorted(
+                                    newly_added,
+                                    key=lambda x: datetime.strptime(
+                                        x,
+                                        "%d/%m/%Y"
+                                    )
+                                )
+
+                                st.success(
+                                    f"Newly Saved: "
+                                    f"{newly_added_sorted[0]} "
+                                    f"to "
+                                    f"{newly_added_sorted[-1]}"
+                                )
+
+                                # =================================
+                                # SHOW ONLY NEW DATA TABLE
+                                # =================================
 
                                 filtered_table = df[
                                     df["date"].isin(newly_added)
@@ -558,9 +565,9 @@ elif newly_added or duplicate_dates:
                                     use_container_width=True
                                 )
 
-                                # =====================================
-                                # PERFORMANCE ONLY FOR NEW DATA
-                                # =====================================
+                                # =============================
+                                # PERFORMANCE
+                                # =============================
 
                                 avg_val = round(
                                     len(filtered_table) / len(newly_added),
