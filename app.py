@@ -187,17 +187,6 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                     station_id = None
                     operator_id = None
                     all_entries = []
-                    uidai_summary_table = None
-
-                    # --- EXTRACTION FOR UIDAI SUMMARY TABLE ---
-                    try:
-                        tabs = pd.read_html(io.StringIO(content))
-                        for t in tabs:
-                            t.columns = [str(c).strip().lower() for c in t.columns]
-                            if "date" in t.columns and "no. of enrolments" in t.columns:
-                                uidai_summary_table = t[t['date'].str.contains(r'\d{2}/\d{2}/\d{4}', na=False)]
-                    except:
-                        pass
 
                     # =============================================
                     # ROW PROCESSING
@@ -271,7 +260,7 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                         break
 
                                 # =================================
-                                # AMOUNT (SECURITY ADDED)
+                                # AMOUNT
                                 # =================================
 
                                 last_col_val = (
@@ -282,10 +271,12 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                     .strip()
                                 )
 
-                                # Pick only if it's a digit and not a long EID (less than 6 digits)
-                                if last_col_val.replace('.', '', 1).isdigit() and len(last_col_val) < 6:
+                                if last_col_val.replace('.', '', 1).isdigit():
                                     f_amt = float(last_col_val)
                                 else:
+                                    f_amt = 0.0
+
+                                if f_amt > 1000000:
                                     f_amt = 0.0
 
                                 # =================================
@@ -542,10 +533,6 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                     f"{newly_added_sorted[-1]}"
                                 )
 
-                                # --- DISPLAY UIDAI SUMMARY TABLE (NEWLY SAVED) ---
-                                st.write("### 📅 UIDAI Summary Table")
-                                st.table(uidai_summary_table)
-
                                 # =================================
                                 # SHOW ONLY NEW DATA TABLE
                                 # =================================
@@ -570,7 +557,7 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                     .reset_index()
                                 )
 
-                                st.write("### ✅ Processed Details")
+                                st.write("### ✅ Newly Saved Data")
 
                                 st.dataframe(
                                     show_table,
