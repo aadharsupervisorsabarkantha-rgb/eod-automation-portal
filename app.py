@@ -188,6 +188,30 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                     operator_id = None
                     all_entries = []
 
+                    # =================================================
+                    # FIND AMOUNT COLUMN INDEX
+                    # =================================================
+
+                    amount_col_index = None
+
+                    all_rows = soup.find_all("tr")
+
+                    for r in all_rows:
+
+                        cols = [
+                            c.get_text(strip=True).lower()
+                            for c in r.find_all(["th", "td"])
+                        ]
+
+                        for idx, col in enumerate(cols):
+
+                            if "total amount charged" in col:
+                                amount_col_index = idx
+                                break
+
+                        if amount_col_index is not None:
+                            break
+
                     # =============================================
                     # ROW PROCESSING
                     # =============================================
@@ -260,29 +284,31 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                         break
 
                                 # =================================
-                                # AMOUNT
+                                # AMOUNT FROM TOTAL AMOUNT CHARGED
                                 # =================================
 
-                                amount_found = 0.0
+                                f_amt = 0.0
 
-                                for val in reversed(tds):
+                                try:
 
-                                    clean_val = (
-                                        val.replace("Rs.", "")
-                                        .replace("Rs", "")
-                                        .replace(",", "")
-                                        .strip()
-                                    )
+                                    if (
+                                        amount_col_index is not None
+                                        and amount_col_index < len(tds)
+                                    ):
 
-                                    if clean_val.replace('.', '', 1).isdigit():
+                                        amt_text = (
+                                            tds[amount_col_index]
+                                            .replace("Rs.", "")
+                                            .replace("Rs", "")
+                                            .replace(",", "")
+                                            .strip()
+                                        )
 
-                                        num = float(clean_val)
+                                        if amt_text.replace(".", "", 1).isdigit():
+                                            f_amt = float(amt_text)
 
-                                        if 1 <= num <= 10000:
-                                            amount_found = num
-                                            break
-
-                                f_amt = amount_found
+                                except:
+                                    f_amt = 0.0
 
                                 # =================================
                                 # SAVE ENTRY
@@ -396,9 +422,7 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
 
                             total = len(day_df)
 
-                            raw_amt = day_df["amt"].sum()
-
-                            amount = int(raw_amt) if raw_amt < 10000 else 0
+                            amount = int(day_df["amt"].sum())
 
                             worksheet.append_row([
                                 d.replace("/", "-"),
@@ -540,10 +564,6 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                     f"{newly_added_sorted[-1]}"
                                 )
 
-                                # =================================
-                                # TABLE
-                                # =================================
-
                                 filtered_table = df[
                                     df["date"].isin(newly_added)
                                 ]
@@ -570,36 +590,6 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                     show_table,
                                     use_container_width=True
                                 )
-
-                                # =================================
-                                # PERFORMANCE
-                                # =================================
-
-                                avg_val = round(
-                                    len(filtered_table) / len(newly_added),
-                                    2
-                                )
-
-                                st.write(
-                                    f"### 📊 Report Stats: {avg_val} Avg"
-                                )
-
-                                if avg_val < 15:
-
-                                    st.toast(
-                                        f"🚨 Low Average Alert: {avg_val}",
-                                        icon="⚠️"
-                                    )
-
-                                    st.markdown(f"""
-                                    <div class='warning-box'>
-                                    ⚠️ Warning:
-                                    Aapka average {avg_val} kam hai!
-                                    </div>
-                                    """, unsafe_allow_html=True)
-
-                                else:
-                                    st.balloons()
 
                     else:
 
