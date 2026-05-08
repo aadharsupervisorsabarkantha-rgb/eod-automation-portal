@@ -260,30 +260,32 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                         break
 
                                 # =================================
-# AMOUNT
-# =================================
+                                # AMOUNT
+                                # =================================
 
-amount_found = 0.0
+                                amount_found = 0.0
 
-for val in reversed(tds):
+                                for val in reversed(tds):
 
-    clean_val = (
-        val.replace("Rs.", "")
-        .replace("Rs", "")
-        .replace(",", "")
-        .strip()
-    )
+                                    clean_val = (
+                                        val.replace("Rs.", "")
+                                        .replace("Rs", "")
+                                        .replace(",", "")
+                                        .strip()
+                                    )
 
-    if clean_val.replace('.', '', 1).isdigit():
+                                    if clean_val.replace('.', '', 1).isdigit():
 
-        num = float(clean_val)
+                                        num = float(clean_val)
 
-        # Valid charge amount only
-        if 1 <= num <= 10000:
-            amount_found = num
-            break
+                                        # Valid charge amount only
+                                        if 1 <= num <= 10000:
 
-f_amt = amount_found
+                                            amount_found = num
+                                            break
+
+                                f_amt = amount_found
+
                                 # =================================
                                 # SAVE ENTRY
                                 # =================================
@@ -393,15 +395,18 @@ f_amt = amount_found
                             )
 
                             worksheet.append_row([
-    datetime.strptime(d, "%d/%m/%Y").strftime("%d-%m-%Y"),
-    station_id,
-    op_name,
-    operator_id,
-    int(enrol),
-    int(update),
-    int(total),
-    int(amount)
-])
+                                datetime.strptime(
+                                    d,
+                                    "%d/%m/%Y"
+                                ).strftime("%d-%m-%Y"),
+                                station_id,
+                                op_name,
+                                operator_id,
+                                int(enrol),
+                                int(update),
+                                int(total),
+                                int(amount)
+                            ])
 
                             newly_added.append(d)
 
@@ -422,7 +427,7 @@ f_amt = amount_found
                                     body,
                                     key=lambda x: datetime.strptime(
                                         x[0],
-                                        "%d/%m/%Y"
+                                        "%d-%m-%Y"
                                     )
                                 )
 
