@@ -263,21 +263,26 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                 # AMOUNT
                                 # =================================
 
-                                last_col_val = (
-                                    tds[-1]
-                                    .replace("Rs.", "")
-                                    .replace("Rs", "")
-                                    .replace(",", "")
-                                    .strip()
-                                )
+                                amount_found = 0.0
 
-                                if last_col_val.replace('.', '', 1).isdigit():
-                                    f_amt = float(last_col_val)
-                                else:
-                                    f_amt = 0.0
+                                for val in reversed(tds):
 
-                                if f_amt > 1000000:
-                                    f_amt = 0.0
+                                    clean_val = (
+                                        val.replace("Rs.", "")
+                                        .replace("Rs", "")
+                                        .replace(",", "")
+                                        .strip()
+                                    )
+
+                                    if clean_val.replace('.', '', 1).isdigit():
+
+                                        num = float(clean_val)
+
+                                        if 1 <= num <= 10000:
+                                            amount_found = num
+                                            break
+
+                                f_amt = amount_found
 
                                 # =================================
                                 # SAVE ENTRY
@@ -340,11 +345,19 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
 
                         existing_data = worksheet.get_all_values()
 
-                        existing_dates = [
-                            r[0]
-                            for r in existing_data
-                            if len(r) > 0
-                        ]
+                        existing_dates = []
+
+                        for r in existing_data:
+
+                            if len(r) > 0:
+
+                                saved_date = (
+                                    str(r[0])
+                                    .replace("-", "/")
+                                    .strip()
+                                )
+
+                                existing_dates.append(saved_date)
 
                         unique_dates_in_file = sorted(
                             list(set(df["date"].tolist())),
@@ -362,21 +375,33 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                         # =========================================
 
                         for d in unique_dates_in_file:
+
                             if d in existing_dates:
                                 duplicate_dates.append(d)
                                 continue
 
                             day_df = df[df["date"] == d]
-                            enrol = len(day_df[day_df["type"] == "E"])
-                            update = len(day_df[day_df["type"] == "U"])
+
+                            enrol = len(
+                                day_df[
+                                    day_df["type"] == "E"
+                                ]
+                            )
+
+                            update = len(
+                                day_df[
+                                    day_df["type"] == "U"
+                                ]
+                            )
+
                             total = len(day_df)
-                            
-                            # Amount logic with security (EID check)
+
                             raw_amt = day_df["amt"].sum()
+
                             amount = int(raw_amt) if raw_amt < 10000 else 0
 
                             worksheet.append_row([
-                                d.replace('/', '-'), # Save as 15-12-2024
+                                d.replace("/", "-"),
                                 station_id,
                                 op_name,
                                 operator_id,
@@ -385,6 +410,7 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                 int(total),
                                 int(amount)
                             ])
+
                             newly_added.append(d)
 
                         # =========================================
@@ -403,7 +429,7 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                 body_sorted = sorted(
                                     body,
                                     key=lambda x: datetime.strptime(
-                                        x[0],
+                                        x[0].replace("-", "/"),
                                         "%d/%m/%Y"
                                     )
                                 )
@@ -418,7 +444,7 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                 pass
 
                         # =========================================
-                        # ALL DATA DUPLICATE
+                        # ALL DUPLICATE
                         # =========================================
 
                         if len(newly_added) == 0 and len(duplicate_dates) > 0:
@@ -461,7 +487,7 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                             """, unsafe_allow_html=True)
 
                         # =========================================
-                        # NEW / MIXED DATA
+                        # MIXED / NEW DATA
                         # =========================================
 
                         elif newly_added or duplicate_dates:
@@ -478,10 +504,7 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                             </div>
                             """, unsafe_allow_html=True)
 
-                            # =====================================
-                            # DUPLICATE DATES
-                            # =====================================
-
+                            # DUPLICATE INFO
                             if duplicate_dates:
 
                                 duplicate_dates_sorted = sorted(
@@ -499,10 +522,7 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                     f"{duplicate_dates_sorted[-1]}"
                                 )
 
-                            # =====================================
-                            # NEWLY SAVED
-                            # =====================================
-
+                            # NEW DATA INFO
                             if newly_added:
 
                                 newly_added_sorted = sorted(
@@ -521,7 +541,7 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                 )
 
                                 # =================================
-                                # SHOW ONLY NEW DATA TABLE
+                                # TABLE
                                 # =================================
 
                                 filtered_table = df[
@@ -539,8 +559,7 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                             "type",
                                             lambda x: (x == "U").sum()
                                         ),
-                                        Total=("type", "count"),
-                                        Amount=("amt", "sum")
+                                        Total=("type", "count")
                                     )
                                     .reset_index()
                                 )
@@ -552,9 +571,9 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                     use_container_width=True
                                 )
 
-                                # =============================
+                                # =================================
                                 # PERFORMANCE
-                                # =============================
+                                # =================================
 
                                 avg_val = round(
                                     len(filtered_table) / len(newly_added),
