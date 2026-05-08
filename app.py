@@ -1,3 +1,4 @@
+```python id="jlwmv8"
 import streamlit as st
 import pyzipper
 import io
@@ -11,7 +12,7 @@ from datetime import datetime
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(
     page_title="EOD Professional Portal",
-    layout="centered"
+    layout="wide"
 )
 
 # ---------------- OPERATOR DATABASE ----------------
@@ -39,7 +40,7 @@ st.markdown("""
 
 .main-box{
     padding:20px;
-    border-radius:12px;
+    border-radius:15px;
     background:#d32f2f;
     color:white;
     text-align:center;
@@ -110,7 +111,7 @@ uploaded_files = st.file_uploader(
     accept_multiple_files=True
 )
 
-# ---------------- PROCESS ----------------
+# ---------------- MAIN PROCESS ----------------
 if st.button("🚀 FINAL SUBMIT & PROCESS"):
 
     if not uploaded_files:
@@ -159,13 +160,13 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                     ]
 
                     if not html_files:
-                        st.warning("⚠️ No HTML file found")
+                        st.warning(
+                            f"⚠️ No HTML file found in {uploaded_file.name}"
+                        )
                         continue
 
                     # ---------------- HTML LOOP ----------------
                     for html_file in html_files:
-
-                        st.write(f"📄 Reading: {html_file}")
 
                         try:
 
@@ -180,13 +181,18 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
 
                             station_id = None
                             operator_id = None
-                            summary_table_ui = None
                             all_entries = []
+                            summary_table_ui = None
 
                             # ---------------- SUMMARY TABLE ----------------
                             try:
-                                tables = pd.read_html(io.StringIO(content))
+
+                                tables = pd.read_html(
+                                    io.StringIO(content)
+                                )
+
                             except:
+
                                 tables = []
 
                             for t in tables:
@@ -221,83 +227,89 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
 
                                 # ---------------- STATION ID ----------------
                                 if "Station ID" in tds[0]:
-                                    station_id = tds[1]
+                                    station_id = tds[1].strip()
 
                                 # ---------------- OPERATOR ID ----------------
                                 if "Operator" in tds[0]:
-                                    operator_id = tds[1]
+                                    operator_id = tds[1].strip()
 
-                                # ---------------- EID DATE EXTRACTION ----------------
+                                # ---------------- EID FIND ----------------
                                 eid_found = None
 
                                 for x in tds:
 
-                                    x = x.strip()
+                                    digits_only = re.sub(r"\D", "", x)
 
-                                    # 28 digit EID
-                                    if re.fullmatch(r"\d{28}", x):
-                                        eid_found = x
+                                    if len(digits_only) >= 20:
+
+                                        eid_found = digits_only
                                         break
 
+                                # ---------------- DATE EXTRACTION ----------------
                                 if eid_found:
 
                                     try:
 
-                                        # Hidden date inside EID
-                                        hidden_date = eid_found[12:20]
+                                        # Date before last 6 digits
+                                        hidden_date = eid_found[-14:-6]
 
                                         d_obj = datetime.strptime(
                                             hidden_date,
                                             "%Y%m%d"
                                         )
 
-                                        d_str = d_obj.strftime("%d/%m/%Y")
+                                        d_str = d_obj.strftime(
+                                            "%d/%m/%Y"
+                                        )
 
-                                        # ---------------- TYPE ----------------
-                                        txn_type = "E"
+                                    except:
+                                        continue
 
-                                        for x in tds:
+                                    # ---------------- TYPE ----------------
+                                    txn_type = "E"
 
-                                            val = x.strip().upper()
+                                    for x in tds:
 
-                                            if val in ["E", "U"]:
-                                                txn_type = val
+                                        val = x.strip().upper()
+
+                                        if val in ["E", "U"]:
+                                            txn_type = val
+                                            break
+
+                                    # ---------------- AMOUNT ----------------
+                                    f_amt = 0.0
+
+                                    for x in reversed(tds):
+
+                                        try:
+
+                                            amt_text = (
+                                                x.replace("Rs.", "")
+                                                 .replace("Rs", "")
+                                                 .replace(",", "")
+                                                 .strip()
+                                            )
+
+                                            amt = float(amt_text)
+
+                                            if amt > 0:
+                                                f_amt = amt
                                                 break
 
-                                        # ---------------- AMOUNT ----------------
-                                        f_amt = 0.0
+                                        except:
+                                            pass
 
-                                        for x in reversed(tds):
+                                    # ---------------- SAVE ENTRY ----------------
+                                    all_entries.append({
+                                        "date": d_str,
+                                        "type": txn_type,
+                                        "amt": f_amt
+                                    })
 
-                                            try:
-
-                                                amt_text = (
-                                                    x.replace("Rs.", "")
-                                                     .replace("Rs", "")
-                                                     .replace(",", "")
-                                                     .strip()
-                                                )
-
-                                                amt = float(amt_text)
-
-                                                if amt > 0:
-                                                    f_amt = amt
-                                                    break
-
-                                            except:
-                                                pass
-
-                                        # ---------------- SAVE ENTRY ----------------
-                                        all_entries.append({
-                                            "date": d_str,
-                                            "type": txn_type,
-                                            "amt": f_amt
-                                        })
-
-                                    except Exception as e:
-                                        st.warning(
-                                            f"EID Parse Error: {e}"
-                                        )
+                            # ---------------- DEBUG ----------------
+                            st.write("Station ID:", station_id)
+                            st.write("Operator ID:", operator_id)
+                            st.write("Entries Found:", len(all_entries))
 
                             # ---------------- OPERATOR NAME ----------------
                             op_name = OPERATOR_MAP.get(
@@ -306,7 +318,7 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                             )
 
                             # ---------------- DATAFRAME ----------------
-                            if station_id and all_entries:
+                            if station_id and len(all_entries) > 0:
 
                                 df = pd.DataFrame(all_entries)
 
@@ -346,6 +358,7 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                     existing_dates = [
                                         row[0]
                                         for row in existing_data[1:]
+                                        if len(row) > 0
                                     ]
 
                                 # ---------------- UNIQUE DATES ----------------
@@ -365,7 +378,9 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                     if d in existing_dates:
                                         continue
 
-                                    day_df = df[df["date"] == d]
+                                    day_df = df[
+                                        df["date"] == d
+                                    ]
 
                                     enrol = len(
                                         day_df[
@@ -418,32 +433,32 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                     </div>
                                     """, unsafe_allow_html=True)
 
-                                    # ---------------- SUMMARY TABLE ----------------
-                                    if summary_table_ui is not None:
-
-                                        st.write("### 📊 Report Summary")
-
-                                        st.table(summary_table_ui)
-
                                     # ---------------- DAILY SUMMARY ----------------
-                                    st.write("### 📅 Date Wise Summary")
+                                    st.write("## 📅 Date Wise Summary")
 
                                     daily_summary = (
                                         df.groupby("date")
                                         .agg(
-                                            Enrol=("type",
-                                                   lambda x: (x == "E").sum()),
-                                            Update=("type",
-                                                    lambda x: (x == "U").sum()),
+                                            Enrol=(
+                                                "type",
+                                                lambda x: (x == "E").sum()
+                                            ),
+                                            Update=(
+                                                "type",
+                                                lambda x: (x == "U").sum()
+                                            ),
                                             Total=("type", "count"),
                                             Amount=("amt", "sum")
                                         )
                                         .reset_index()
                                     )
 
-                                    st.dataframe(daily_summary)
+                                    st.dataframe(
+                                        daily_summary,
+                                        use_container_width=True
+                                    )
 
-                                    # ---------------- AVERAGE ----------------
+                                    # ---------------- PERFORMANCE ----------------
                                     avg_val = round(
                                         len(df) / len(unique_dates),
                                         2
@@ -483,28 +498,29 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
 
                             else:
 
-                                st.warning(
+                                st.error(
                                     "⚠️ Station ID ya transaction data nahi mila"
                                 )
 
                         except Exception as e:
 
                             st.error(
-                                f"❌ HTML Processing Error: {str(e)}"
+                                f"❌ HTML Process Error ({html_file}) : {str(e)}"
                             )
 
             except RuntimeError:
 
                 st.error(
-                    f"❌ Wrong ZIP Password: {uploaded_file.name}"
+                    f"❌ Wrong ZIP Password : {uploaded_file.name}"
                 )
 
             except Exception as e:
 
                 st.error(
-                    f"❌ ZIP Error: {str(e)}"
+                    f"❌ ZIP Error ({uploaded_file.name}) : {str(e)}"
                 )
 
     except Exception as e:
 
-        st.error(f"🚨 Main Error: {str(e)}")
+        st.error(f"🚨 Main Error : {str(e)}")
+```
