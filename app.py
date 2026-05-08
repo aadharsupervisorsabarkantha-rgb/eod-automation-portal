@@ -388,14 +388,14 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                             )
 
                             worksheet.append_row([
-                                d,
-                                station_id,
-                                op_name,
-                                operator_id,
-                                int(enrol),
-                                int(update),
-                                int(total),
-                                int(amount)
+    datetime.strptime(d, "%d/%m/%Y").strftime("%d-%m-%Y"),
+    station_id,
+    op_name,
+    operator_id,
+    int(enrol),
+    int(update),
+    int(total),
+    int(amount)
 ])
 
                             newly_added.append(d)
