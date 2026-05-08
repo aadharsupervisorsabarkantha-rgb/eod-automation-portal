@@ -542,19 +542,21 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                 ]
 
                                 show_table = (
-                                    filtered_table.groupby("date")
-                                    .agg(
-                                        Enrol=(
-                                            "type",
-                                            lambda x: (x == "E").sum()
-                                        ),
-                                        Update=(
-                                            "type",
-                                            lambda x: (x == "U").sum()
-                                        ),
-                                        Total=("type", "count")
-                                    )
-                                    .reset_index()
+    filtered_table.groupby("date")
+    .agg(
+        Enrol=(
+            "type",
+            lambda x: (x == "E").sum()
+        ),
+        Update=(
+            "type",
+            lambda x: (x == "U").sum()
+        ),
+        Total=("type", "count"),
+        Amount=("amt", "sum")
+    )
+    .reset_index()
+)
                                 )
 
                                 st.write("### ✅ Newly Saved Data")
