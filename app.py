@@ -1,6 +1,6 @@
 import streamlit as st
 import pyzipper
-import os, shutil, re, tempfile
+import io, os, re
 import pandas as pd
 from bs4 import BeautifulSoup
 import gspread
@@ -42,7 +42,7 @@ uploaded_files = st.file_uploader("Upload ZIP Reports", type="zip", accept_multi
 
 if st.button("🚀 FINAL SUBMIT & PROCESS"):
     if not uploaded_files or not zip_password:
-        st.error("❌ Password aur File zaroori hai!")
+        st.error("❌ Password aur File dono zaroori hain!")
     else:
         try:
             creds_dict = st.secrets["gcp_service_account"]
@@ -52,90 +52,88 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
             spreadsheet = client.open_by_key("19mlf7dpNJyyvnKYZpoJtjyQY6RkTaze4FsC7xCKnMrU")
 
             for uploaded_file in uploaded_files:
-                # Naya Temporary Folder banane ka sahi tarika
-                with tempfile.TemporaryDirectory() as extract_dir:
-                    with pyzipper.AESZipFile(uploaded_file) as zf:
-                        try:
-                            zf.extractall(extract_dir, pwd=zip_password.encode())
-                        except:
-                            st.error(f"🚨 Password Galat Hai: {uploaded_file.name}")
-                            continue
+                with pyzipper.AESZipFile(uploaded_file) as zf:
+                    zf.setpassword(zip_password.encode())
+                    
+                    # HTML files dhoondhna zip ke andar
+                    html_files = [f for f in zf.namelist() if f.endswith('.html')]
+                    
+                    if not html_files:
+                        st.error(f"❌ {uploaded_file.name} mein koi HTML file nahi mili!")
+                        continue
 
-                    station_id, operator_id = None, None
-                    all_entries = []
-                    summary_table_ui = None
-
-                    for root, dirs, files in os.walk(extract_dir):
-                        for file in files:
-                            if file.endswith(".html"):
-                                path = os.path.join(root, file)
-                                try:
-                                    tabs = pd.read_html(path)
-                                    for t in tabs:
-                                        t.columns = [str(c).lower() for c in t.columns]
-                                        if "no. of enrolments" in t.columns:
-                                            summary_table_ui = t[t['date'].str.contains(r'\d{2}/\d{2}/\d{4}', na=False)]
-                                except: pass
-
-                                with open(path, "r", encoding="utf-8", errors="ignore") as f:
-                                    soup = BeautifulSoup(f.read(), "html.parser")
-                                    rows = soup.find_all("tr")
-                                    for row in rows:
-                                        tds = [td.get_text(strip=True) for td in row.find_all("td")]
-                                        if len(tds) < 2: continue
-                                        if "Station ID" in tds[0]: station_id = tds[1]
-                                        if "Operator" in tds[0]: operator_id = tds[1]
-                                        if len(tds) > 10 and "/" in tds[1]:
-                                            date_match = re.search(r'(\d{4})/(\d{2})/(\d{2})', tds[1])
-                                            if date_match:
-                                                d_str = f"{date_match.group(3)}/{date_match.group(2)}/{date_match.group(1)}"
-                                                f_amt = float(tds[-2].replace("Rs.", "").strip()) if tds[-2].replace('.','').isdigit() else 0.0
-                                                all_entries.append({"date": d_str, "type": tds[3].upper(), "amt": f_amt})
-
-                    op_name = OPERATOR_MAP.get(operator_id, "Unknown")
-
-                    if station_id and all_entries:
-                        df = pd.DataFrame(all_entries)
-                        try: worksheet = spreadsheet.worksheet(str(station_id))
-                        except: 
-                            worksheet = spreadsheet.add_worksheet(title=str(station_id), rows="1000", cols="8")
-                            worksheet.append_row(["Date", "Station ID", "Operator", "ID", "Enrol", "Update", "Total", "Amount"])
-
-                        existing_data = worksheet.get_all_values()
-                        flat_existing = " ".join([r[0] for r in existing_data])
-                        unique_dates = sorted(list(set(df['date'].tolist())), key=lambda x: datetime.strptime(x, "%d/%m/%Y"))
-                        newly_added = []
-
-                        for d in unique_dates:
-                            if d in flat_existing: continue
-                            day_df = df[df['date'] == d]
-                            enrol = len(day_df[day_df['type'] == 'E'])
-                            update = len(day_df[day_df['type'] == 'U'])
-                            total = len(day_df)
-                            amount = int(day_df['amt'].sum())
-                            worksheet.append_row([d, station_id, op_name, operator_id, enrol, update, total, amount])
-                            newly_added.append(d)
-
-                        if newly_added:
-                            st.markdown(f"""
-                            <div class="success-card">
-                                <b style="font-size:18px;">✅ DATA SAVED SUCCESSFULLY!</b><br><br>
-                                👤 <b>Operator:</b> {op_name}<br>
-                                📍 <b>Station:</b> {station_id}<br>
-                                📅 <b>Dates Processed:</b> {newly_added[0]} to {newly_added[-1]}
-                            </div>
-                            """, unsafe_allow_html=True)
-                            st.write("### 📊 Summary of Uploaded Report")
-                            st.table(summary_table_ui)
+                    for html_file in html_files:
+                        with zf.open(html_file) as f:
+                            content = f.read().decode('utf-8', errors='ignore')
+                            soup = BeautifulSoup(content, "html.parser")
                             
-                            avg_val = round(len(df) / len(unique_dates), 2)
-                            if avg_val < 15:
-                                st.toast(f"🚨 Low Average Alert: {avg_val}", icon="⚠️")
-                                st.markdown(f"<div class='warning-box'>⚠️ Warning: Aapka average {avg_val} hai. 15 se kam kaam hai!</div>", unsafe_allow_html=True)
-                            else:
-                                st.balloons()
-                                st.success(f"🔥 Performance: {avg_val} Avg")
-                        else:
-                            st.info("ℹ️ Sari dates pehle se sheet mein hain.")
+                            # Tables extract karna (UI ke liye)
+                            tabs = pd.read_html(io.StringIO(content))
+                            summary_table_ui = None
+                            for t in tabs:
+                                t.columns = [str(c).lower() for c in t.columns]
+                                if "no. of enrolments" in t.columns:
+                                    summary_table_ui = t[t['date'].str.contains(r'\d{2}/\d{2}/\d{4}', na=False)]
+
+                            # Station & Operator Info
+                            station_id, operator_id = None, None
+                            all_entries = []
+                            rows = soup.find_all("tr")
+                            for row in rows:
+                                tds = [td.get_text(strip=True) for td in row.find_all("td")]
+                                if len(tds) < 2: continue
+                                if "Station ID" in tds[0]: station_id = tds[1]
+                                if "Operator" in tds[0]: operator_id = tds[1]
+                                
+                                if len(tds) > 10 and "/" in tds[1]:
+                                    date_match = re.search(r'(\d{4})/(\d{2})/(\d{2})', tds[1])
+                                    if date_match:
+                                        d_str = f"{date_match.group(3)}/{date_match.group(2)}/{date_match.group(1)}"
+                                        f_amt = float(tds[-2].replace("Rs.", "").strip()) if tds[-2].replace('.','').isdigit() else 0.0
+                                        all_entries.append({"date": d_str, "type": tds[3].upper(), "amt": f_amt})
+
+                            op_name = OPERATOR_MAP.get(operator_id, "Unknown")
+
+                            if station_id and all_entries:
+                                df = pd.DataFrame(all_entries)
+                                try: worksheet = spreadsheet.worksheet(str(station_id))
+                                except: 
+                                    worksheet = spreadsheet.add_worksheet(title=str(station_id), rows="1000", cols="8")
+                                    worksheet.append_row(["Date", "Station ID", "Operator", "ID", "Enrol", "Update", "Total", "Amount"])
+
+                                existing_data = worksheet.get_all_values()
+                                flat_existing = " ".join([r[0] for r in existing_data])
+                                unique_dates = sorted(list(set(df['date'].tolist())), key=lambda x: datetime.strptime(x, "%d/%m/%Y"))
+                                newly_added = []
+
+                                for d in unique_dates:
+                                    if d in flat_existing: continue
+                                    day_df = df[df['date'] == d]
+                                    enrol = len(day_df[day_df['type'] == 'E'])
+                                    update = len(day_df[day_df['type'] == 'U'])
+                                    total = len(day_df)
+                                    amount = int(day_df['amt'].sum())
+                                    worksheet.append_row([d, station_id, op_name, operator_id, enrol, update, total, amount])
+                                    newly_added.append(d)
+
+                                if newly_added:
+                                    st.markdown(f"""
+                                    <div class="success-card">
+                                        <b style="font-size:18px;">✅ DATA SAVED SUCCESSFULLY!</b><br><br>
+                                        👤 <b>Operator:</b> {op_name}<br>
+                                        📍 <b>Station:</b> {station_id}<br>
+                                        📅 <b>Dates Processed:</b> {newly_added[0]} to {newly_added[-1]}
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                                    st.table(summary_table_ui)
+                                    
+                                    avg_val = round(len(df) / len(unique_dates), 2)
+                                    if avg_val < 15:
+                                        st.toast(f"🚨 Low Average Alert: {avg_val}", icon="⚠️")
+                                        st.markdown(f"<div class='warning-box'>⚠️ Low Average Warning: {avg_val} Avg</div>", unsafe_allow_html=True)
+                                    else:
+                                        st.balloons()
+                                else:
+                                    st.info(f"ℹ️ {station_id} ka data pehle se sheet mein hai.")
         except Exception as e:
-            st.error(f"Error: {e}")
+            st.error(f"🚨 Error: {str(e)}")
