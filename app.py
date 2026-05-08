@@ -450,86 +450,79 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                             </div>
                             """, unsafe_allow_html=True)
 
-                        # =============================================
-                        # NEW / MIXED DATA
-                        # =============================================
+                       # =============================================
+# NEW / MIXED DATA
+# =============================================
 
-                        elif newly_added or duplicate_dates:
+elif newly_added or duplicate_dates:
 
-                            msg_html = f"""
-                            <div class="success-card">
+    # =========================================
+    # SUCCESS CARD
+    # =========================================
 
-                            <h3>✅ DATA PROCESS COMPLETED</h3>
+    with st.container():
 
-                            👤 <b>Operator:</b> {op_name}<br>
-                            🆔 <b>Operator ID:</b> {operator_id}<br>
-                            📍 <b>Station:</b> {station_id}<br><br>
-                            """
+        st.markdown(f"""
+        <div class="success-card">
+        <h3>✅ DATA PROCESS COMPLETED</h3>
 
-                            # Duplicate Dates
-                            if duplicate_dates:
+        👤 <b>Operator:</b> {op_name}<br>
+        🆔 <b>Operator ID:</b> {operator_id}<br>
+        📍 <b>Station:</b> {station_id}
+        </div>
+        """, unsafe_allow_html=True)
 
-                                duplicate_dates_sorted = sorted(
-                                    duplicate_dates,
-                                    key=lambda x: datetime.strptime(
-                                        x,
-                                        "%d/%m/%Y"
-                                    )
-                                )
+        # Duplicate Dates
+        if duplicate_dates:
 
-                                if len(duplicate_dates_sorted) == 1:
+            duplicate_dates_sorted = sorted(
+                duplicate_dates,
+                key=lambda x: datetime.strptime(
+                    x,
+                    "%d/%m/%Y"
+                )
+            )
 
-                                    msg_html += f"""
-                                    <div style="color:#b91c1c; margin-top:10px;">
-                                    ⚠️ <b>Already Saved:</b>
-                                    {duplicate_dates_sorted[0]}
-                                    </div>
-                                    """
+            if len(duplicate_dates_sorted) == 1:
 
-                                else:
+                st.error(
+                    f"Already Saved: {duplicate_dates_sorted[0]}"
+                )
 
-                                    msg_html += f"""
-                                    <div style="color:#b91c1c; margin-top:10px;">
-                                    ⚠️ <b>Already Saved:</b><br>
-                                    {duplicate_dates_sorted[0]} to {duplicate_dates_sorted[-1]}
-                                    </div>
-                                    """
+            else:
 
-                            # Newly Saved Dates
-                            if newly_added:
+                st.error(
+                    f"Already Saved: "
+                    f"{duplicate_dates_sorted[0]} "
+                    f"to "
+                    f"{duplicate_dates_sorted[-1]}"
+                )
 
-                                newly_added_sorted = sorted(
-                                    newly_added,
-                                    key=lambda x: datetime.strptime(
-                                        x,
-                                        "%d/%m/%Y"
-                                    )
-                                )
+        # Newly Saved Dates
+        if newly_added:
 
-                                if len(newly_added_sorted) == 1:
+            newly_added_sorted = sorted(
+                newly_added,
+                key=lambda x: datetime.strptime(
+                    x,
+                    "%d/%m/%Y"
+                )
+            )
 
-                                    msg_html += f"""
-                                    <div style="color:#166534; margin-top:10px;">
-                                    ✅ <b>Newly Saved:</b>
-                                    {newly_added_sorted[0]}
-                                    </div>
-                                    """
+            if len(newly_added_sorted) == 1:
 
-                                else:
+                st.success(
+                    f"Newly Saved: {newly_added_sorted[0]}"
+                )
 
-                                    msg_html += f"""
-                                    <div style="color:#166534; margin-top:10px;">
-                                    ✅ <b>Newly Saved:</b><br>
-                                    {newly_added_sorted[0]} to {newly_added_sorted[-1]}
-                                    </div>
-                                    """
+            else:
 
-                            msg_html += "</div>"
-
-                            st.markdown(
-                                msg_html,
-                                unsafe_allow_html=True
-                            )
+                st.success(
+                    f"Newly Saved: "
+                    f"{newly_added_sorted[0]} "
+                    f"to "
+                    f"{newly_added_sorted[-1]}"
+                )
 
                             # =========================================
                             # SHOW ONLY NEW DATA TABLE
