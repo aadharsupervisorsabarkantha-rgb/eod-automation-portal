@@ -54,6 +54,8 @@ st.markdown("""
     border:1px solid #16a34a;
     color:#166534;
     margin-top:15px;
+    font-size:16px;
+    line-height:1.8;
 }
 
 .warning-box{
@@ -194,31 +196,19 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                         if len(tds) < 2:
                             continue
 
-                        # -----------------------------------------
-                        # STATION ID
-                        # -----------------------------------------
-
+                        # Station ID
                         if "Station ID" in tds[0]:
                             station_id = tds[1].strip()
 
-                        # -----------------------------------------
-                        # OPERATOR ID
-                        # -----------------------------------------
-
+                        # Operator ID
                         if "Operator" in tds[0]:
                             operator_id = tds[1].strip()
 
-                        # -----------------------------------------
-                        # TRANSACTION ROWS ONLY
-                        # -----------------------------------------
-
+                        # Transaction rows only
                         if len(tds) < 10:
                             continue
 
-                        # -----------------------------------------
-                        # FIND EID
-                        # -----------------------------------------
-
+                        # Find EID
                         eid_val = None
 
                         for x in tds:
@@ -229,10 +219,7 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                 eid_val = digits
                                 break
 
-                        # -----------------------------------------
-                        # DATE EXTRACTION
-                        # -----------------------------------------
-
+                        # Extract Date
                         if eid_val:
 
                             try:
@@ -244,10 +231,7 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                     "%Y%m%d"
                                 ).strftime("%d/%m/%Y")
 
-                                # ---------------------------------
-                                # TYPE
-                                # ---------------------------------
-
+                                # Type
                                 txn_type = "E"
 
                                 for x in tds:
@@ -258,10 +242,7 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                         txn_type = val
                                         break
 
-                                # ---------------------------------
-                                # AMOUNT
-                                # ---------------------------------
-
+                                # Amount
                                 last_col_val = (
                                     tds[-1]
                                     .replace("Rs.", "")
@@ -278,10 +259,7 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                 if f_amt > 1000000:
                                     f_amt = 0.0
 
-                                # ---------------------------------
-                                # SAVE ENTRY
-                                # ---------------------------------
-
+                                # Save Entry
                                 all_entries.append({
                                     "date": h_date,
                                     "type": txn_type,
@@ -357,7 +335,7 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                         duplicate_dates = []
 
                         # =============================================
-                        # DATE LOOP
+                        # SAVE DATA
                         # =============================================
 
                         for d in unique_dates_in_file:
@@ -430,7 +408,7 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                 pass
 
                         # =============================================
-                        # SUCCESS UI
+                        # SUCCESS CARD
                         # =============================================
 
                         if newly_added or duplicate_dates:
@@ -444,10 +422,7 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                             📍 <b>Station:</b> {station_id}<br><br>
                             """
 
-                            # -----------------------------------------
-                            # DUPLICATE DATES
-                            # -----------------------------------------
-
+                            # Duplicate Dates
                             if duplicate_dates:
 
                                 duplicate_dates_sorted = sorted(
@@ -461,27 +436,22 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                 if len(duplicate_dates_sorted) == 1:
 
                                     msg_html += f"""
-                                    <p style="color:#b91c1c;">
+                                    <div style="color:#b91c1c; margin-top:10px;">
                                     ⚠️ <b>Already Saved:</b>
                                     {duplicate_dates_sorted[0]}
-                                    </p>
+                                    </div>
                                     """
 
                                 else:
 
                                     msg_html += f"""
-                                    <p style="color:#b91c1c;">
+                                    <div style="color:#b91c1c; margin-top:10px;">
                                     ⚠️ <b>Already Saved:</b><br>
-                                    {duplicate_dates_sorted[0]}
-                                    to
-                                    {duplicate_dates_sorted[-1]}
-                                    </p>
+                                    {duplicate_dates_sorted[0]} to {duplicate_dates_sorted[-1]}
+                                    </div>
                                     """
 
-                            # -----------------------------------------
-                            # NEWLY SAVED DATES
-                            # -----------------------------------------
-
+                            # Newly Saved Dates
                             if newly_added:
 
                                 newly_added_sorted = sorted(
@@ -495,21 +465,19 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                                 if len(newly_added_sorted) == 1:
 
                                     msg_html += f"""
-                                    <p style="color:#166534;">
+                                    <div style="color:#166534; margin-top:10px;">
                                     ✅ <b>Newly Saved:</b>
                                     {newly_added_sorted[0]}
-                                    </p>
+                                    </div>
                                     """
 
                                 else:
 
                                     msg_html += f"""
-                                    <p style="color:#166534;">
+                                    <div style="color:#166534; margin-top:10px;">
                                     ✅ <b>Newly Saved:</b><br>
-                                    {newly_added_sorted[0]}
-                                    to
-                                    {newly_added_sorted[-1]}
-                                    </p>
+                                    {newly_added_sorted[0]} to {newly_added_sorted[-1]}
+                                    </div>
                                     """
 
                             msg_html += "</div>"
@@ -520,7 +488,7 @@ if st.button("🚀 FINAL SUBMIT & PROCESS"):
                             )
 
                             # =========================================
-                            # SHOW ONLY NEWLY SAVED DATA
+                            # SHOW ONLY NEWLY SAVED TABLE
                             # =========================================
 
                             if newly_added:
